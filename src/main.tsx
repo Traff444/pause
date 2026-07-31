@@ -669,7 +669,7 @@ function EntryScreen({
   return (
     <main className="entry-screen">
       <div className="entry-hero" aria-hidden="true">
-        <img src={assetUrl('assets/entry-hands-v2.png')} alt="" />
+        <img src={assetUrl('assets/entry-hands.png')} alt="" />
       </div>
 
       <section className="entry-content" aria-labelledby="entry-title">

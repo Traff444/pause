@@ -431,7 +431,6 @@ input:focus-visible {
   width: 100%;
   padding-top: max(34px, env(safe-area-inset-top));
   flex: 0 0 auto;
-  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 calc(100% - 40px));
   overflow: hidden;
   line-height: 0;
 }
@@ -439,17 +438,14 @@ input:focus-visible {
 .entry-hero img {
   display: block;
   width: 100%;
-  max-width: none;
   height: auto;
-  transform: translate3d(-5%, 0, 0) scale(1.28);
-  transform-origin: 50% 4%;
 }
 
 .entry-content {
   position: relative;
   z-index: 1;
   width: min(calc(100% - 56px), 338px);
-  margin: -12px auto 0;
+  margin: 9px auto 0;
   padding-bottom: calc(24px + env(safe-area-inset-bottom));
   text-align: center;
 }
