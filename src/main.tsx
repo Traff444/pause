@@ -18,15 +18,20 @@ import {
   Clock3,
   Cloud,
   CloudOff,
+  Eye,
+  EyeOff,
   Heart,
   Info,
+  LockKeyhole,
   LogOut,
+  LogIn,
   Mail,
   Play,
   RotateCcw,
   Settings,
   Sparkles,
   Target,
+  UserPlus,
   X,
 } from 'lucide-react';
 import {
@@ -63,12 +68,19 @@ import {
   getAuthSession,
   loadCloudState,
   mergeAppStates,
-  requestEmailCode,
+  signInWithPassword,
   signOut,
+  signUpWithPassword,
   supabase,
   syncCloudState,
-  verifyEmailCode,
 } from './cloud';
+import {
+  isValidEmail,
+  normalizeEmail,
+  passwordAuthErrorMessage,
+  passwordValidationMessage,
+  type PasswordAuthMode,
+} from './auth';
 import { clearAppState, loadAppState, saveAppState } from './storage';
 import './style.css';
 
@@ -365,9 +377,12 @@ function App() {
   if (cloudConfigured && !session && !demoState) {
     return (
       <EntryScreen
-        onRequestCode={requestEmailCode}
-        onVerifyCode={async (email, code) => {
-          const nextSession = await verifyEmailCode(email, code);
+        onSignIn={async (email, password) => {
+          const nextSession = await signInWithPassword(email, password);
+          setSession(nextSession);
+        }}
+        onSignUp={async (email, password) => {
+          const nextSession = await signUpWithPassword(email, password);
           setSession(nextSession);
         }}
       />
@@ -606,75 +621,46 @@ function GoogleIcon() {
   );
 }
 
-function authErrorMessage(error: unknown) {
-  const message = error instanceof Error ? error.message.toLowerCase() : '';
-  if (message.includes('rate') || message.includes('seconds')) {
-    return 'Новый код можно запросить через минуту';
-  }
-  if (message.includes('token') || message.includes('expired') || message.includes('invalid')) {
-    return 'Код неверный или уже истёк';
-  }
-  return 'Не получилось войти. Проверь интернет и попробуй ещё раз';
-}
-
 function EntryScreen({
   onContinue,
-  onRequestCode,
-  onVerifyCode,
+  onSignIn,
+  onSignUp,
 }: {
   onContinue?: () => void;
-  onRequestCode?: (email: string) => Promise<void>;
-  onVerifyCode?: (email: string, code: string) => Promise<void>;
+  onSignIn?: (email: string, password: string) => Promise<void>;
+  onSignUp?: (email: string, password: string) => Promise<void>;
 }) {
   const [legal, setLegal] = useState<'terms' | 'privacy'>();
+  const [authMode, setAuthMode] = useState<PasswordAuthMode>('sign-in');
   const [email, setEmail] = useState('');
-  const [code, setCode] = useState('');
-  const [codeSent, setCodeSent] = useState(false);
+  const [password, setPassword] = useState('');
+  const [passwordVisible, setPasswordVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [authError, setAuthError] = useState<string>();
-  const [resendIn, setResendIn] = useState(0);
-  const emailAuth = Boolean(onRequestCode && onVerifyCode);
+  const emailAuth = Boolean(onSignIn && onSignUp);
 
-  useEffect(() => {
-    if (!resendIn) return;
-    const timer = window.setInterval(
-      () => setResendIn((current) => Math.max(0, current - 1)),
-      1_000,
-    );
-    return () => window.clearInterval(timer);
-  }, [resendIn]);
-
-  const sendCode = async () => {
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail || !normalizedEmail.includes('@') || !onRequestCode) {
+  const submitPasswordAuth = async () => {
+    const normalizedEmail = normalizeEmail(email);
+    if (!isValidEmail(normalizedEmail)) {
       setAuthError('Введи корректный адрес почты');
       return;
     }
-    setBusy(true);
-    setAuthError(undefined);
-    try {
-      await onRequestCode(normalizedEmail);
-      setEmail(normalizedEmail);
-      setCodeSent(true);
-      setResendIn(60);
-    } catch (error) {
-      setAuthError(authErrorMessage(error));
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const verifyCode = async () => {
-    if (code.length !== 6 || !onVerifyCode) {
-      setAuthError('Введи шестизначный код из письма');
+    const passwordError = passwordValidationMessage(password);
+    if (passwordError) {
+      setAuthError(passwordError);
       return;
     }
+
+    const action = authMode === 'sign-up' ? onSignUp : onSignIn;
+    if (!action) return;
+
     setBusy(true);
     setAuthError(undefined);
     try {
-      await onVerifyCode(email, code);
+      setEmail(normalizedEmail);
+      await action(normalizedEmail, password);
     } catch (error) {
-      setAuthError(authErrorMessage(error));
+      setAuthError(passwordAuthErrorMessage(error, authMode));
     } finally {
       setBusy(false);
     }
@@ -695,26 +681,40 @@ function EntryScreen({
             className="entry-email-auth"
             onSubmit={(event) => {
               event.preventDefault();
-              void (codeSent ? verifyCode() : sendCode());
+              void submitPasswordAuth();
             }}
           >
-            <p>
-              {codeSent
-                ? `Отправили код на ${email}`
-                : 'Введи почту — пришлём шестизначный код для входа'}
+            <div className="entry-auth-tabs" role="tablist" aria-label="Способ входа">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={authMode === 'sign-in'}
+                onClick={() => {
+                  setAuthMode('sign-in');
+                  setAuthError(undefined);
+                }}
+              >
+                Войти
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={authMode === 'sign-up'}
+                onClick={() => {
+                  setAuthMode('sign-up');
+                  setAuthError(undefined);
+                }}
+              >
+                Создать аккаунт
+              </button>
+            </div>
+            <p className="entry-auth-intro">
+              {authMode === 'sign-up'
+                ? 'Создай аккаунт, чтобы прогресс сохранялся'
+                : 'Войди — твой прогресс уже ждёт тебя'}
             </p>
-            {codeSent ? (
-              <input
-                className="entry-code-input"
-                value={code}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                placeholder="000000"
-                aria-label="Код из письма"
-                onChange={(event) => setCode(event.target.value.replace(/\D/g, '').slice(0, 6))}
-                autoFocus
-              />
-            ) : (
+            <label className="entry-auth-field">
+              <Mail aria-hidden="true" />
               <input
                 value={email}
                 type="email"
@@ -725,31 +725,50 @@ function EntryScreen({
                 onChange={(event) => setEmail(event.target.value)}
                 autoFocus
               />
-            )}
+            </label>
+            <label className="entry-auth-field">
+              <LockKeyhole aria-hidden="true" />
+              <input
+                value={password}
+                type={passwordVisible ? 'text' : 'password'}
+                autoComplete={authMode === 'sign-up' ? 'new-password' : 'current-password'}
+                placeholder="Пароль — минимум 8 символов"
+                aria-label="Пароль"
+                minLength={8}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+              <button
+                type="button"
+                className="entry-password-toggle"
+                aria-label={passwordVisible ? 'Скрыть пароль' : 'Показать пароль'}
+                onClick={() => setPasswordVisible((current) => !current)}
+              >
+                {passwordVisible ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
+              </button>
+            </label>
             {authError && <span className="entry-auth-error" role="alert">{authError}</span>}
             <button className="social-button telegram-button" type="submit" disabled={busy}>
-              <Mail />
+              {authMode === 'sign-up' ? <UserPlus /> : <LogIn />}
               <span>
-                {busy ? 'Подождите…' : codeSent ? 'Войти' : 'Получить код'}
+                {busy
+                  ? 'Подождите…'
+                  : authMode === 'sign-up'
+                    ? 'Создать аккаунт'
+                    : 'Войти'}
               </span>
             </button>
-            {codeSent && (
-              <div className="entry-auth-links">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCodeSent(false);
-                    setCode('');
-                    setAuthError(undefined);
-                  }}
-                >
-                  Изменить почту
-                </button>
-                <button type="button" disabled={Boolean(resendIn)} onClick={() => void sendCode()}>
-                  {resendIn ? `Повторить через ${resendIn} с` : 'Отправить снова'}
-                </button>
-              </div>
-            )}
+            <button
+              className="entry-auth-switch"
+              type="button"
+              onClick={() => {
+                setAuthMode((current) => current === 'sign-in' ? 'sign-up' : 'sign-in');
+                setAuthError(undefined);
+              }}
+            >
+              {authMode === 'sign-up'
+                ? 'Уже есть аккаунт? Войти'
+                : 'Нет аккаунта? Создать'}
+            </button>
           </form>
         ) : (
           <>

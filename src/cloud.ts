@@ -104,24 +104,30 @@ export async function getAuthSession(): Promise<Session | null> {
   return data.session;
 }
 
-export async function requestEmailCode(email: string) {
+export async function signInWithPassword(email: string, password: string) {
   const client = requireCloud();
-  const { error } = await client.auth.signInWithOtp({
+  const { data, error } = await client.auth.signInWithPassword({
     email,
-    options: { shouldCreateUser: true },
-  });
-  if (error) throw error;
-}
-
-export async function verifyEmailCode(email: string, token: string) {
-  const client = requireCloud();
-  const { data, error } = await client.auth.verifyOtp({
-    email,
-    token,
-    type: 'email',
+    password,
   });
   if (error) throw error;
   if (!data.session) throw new Error('Сессия не создана');
+  return data.session;
+}
+
+export async function signUpWithPassword(email: string, password: string) {
+  const client = requireCloud();
+  const { data, error } = await client.auth.signUp({
+    email,
+    password,
+  });
+  if (error) throw error;
+  if (!data.session) {
+    if (data.user?.identities?.length === 0) {
+      throw new Error('User already registered');
+    }
+    throw new Error('Email not confirmed');
+  }
   return data.session;
 }
 

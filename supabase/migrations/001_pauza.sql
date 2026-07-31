@@ -1,4 +1,4 @@
--- Пауза: email OTP profiles, offline-first state sync and normalized smoking log.
+-- Пауза: authenticated profiles, offline-first state sync and normalized smoking log.
 -- Run this migration only in the dedicated Supabase project for this product.
 
 create extension if not exists pgcrypto;
