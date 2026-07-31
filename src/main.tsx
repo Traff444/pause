@@ -866,17 +866,28 @@ function FinalOnboardingScreen({
   onDone: () => void;
 }) {
   return (
-    <main className="final-screen final-screen-reference">
-      <img
-        className="final-screen-reference-image"
-        src={assetUrl('assets/final-screen.png')}
-        alt=""
-        aria-hidden="true"
-      />
+    <main className="final-screen">
+      <div className="final-screen-reference">
+        <img
+          className="final-screen-reference-image"
+          src={assetUrl('assets/final-screen.png')}
+          alt=""
+          aria-hidden="true"
+        />
+
+        <button
+          className="final-back-hotspot"
+          type="button"
+          onClick={onBack}
+          aria-label="Назад"
+        />
+      </div>
 
       <div className="final-path-steps" aria-label="Заметить, отложить, выбрать">
         <span className="final-path-step final-path-step-notice">Заметить</span>
+        <ArrowRight aria-hidden="true" />
         <span className="final-path-step final-path-step-delay">Отложить</span>
+        <ArrowRight aria-hidden="true" />
         <span className="final-path-step final-path-step-choose">Выбрать</span>
       </div>
 
@@ -891,17 +902,14 @@ function FinalOnboardingScreen({
       </div>
 
       <button
-        className="final-back-hotspot"
-        type="button"
-        onClick={onBack}
-        aria-label="Назад"
-      />
-      <button
         className="final-ready-hotspot"
         type="button"
         onClick={onDone}
         aria-label="Я готов"
-      />
+      >
+        <span>Я ГОТОВ</span>
+        <ArrowRight aria-hidden="true" />
+      </button>
     </main>
   );
 }
@@ -923,12 +931,35 @@ function PriceOnboardingScreen({
 
   return (
     <main className="price-screen">
-      <img
-        className="price-screen-reference-image"
-        src={assetUrl('assets/onboarding-price-screen.png')}
-        alt=""
-        aria-hidden="true"
-      />
+      <div className="price-screen-reference">
+        <img
+          className="price-screen-reference-image"
+          src={assetUrl('assets/onboarding-price-screen.png')}
+          alt=""
+          aria-hidden="true"
+        />
+
+        <button
+          className="price-back-hotspot"
+          type="button"
+          onClick={onBack}
+          aria-label="Назад"
+        />
+
+        <label className="price-input-shell">
+          <span className="visually-hidden">Средняя цена пачки</span>
+          <input
+            type="text"
+            inputMode="numeric"
+            autoComplete="off"
+            value={value}
+            placeholder="250"
+            onChange={handleChange}
+            aria-describedby="price-later-hint"
+          />
+          <span aria-hidden="true">₽</span>
+        </label>
+      </div>
 
       <div className="visually-hidden">
         <span>2 из 3. Шаг 2 из 3.</span>
@@ -938,27 +969,6 @@ function PriceOnboardingScreen({
           сэкономить.
         </p>
       </div>
-
-      <button
-        className="price-back-hotspot"
-        type="button"
-        onClick={onBack}
-        aria-label="Назад"
-      />
-
-      <label className="price-input-shell">
-        <span className="visually-hidden">Средняя цена пачки</span>
-        <input
-          type="text"
-          inputMode="numeric"
-          autoComplete="off"
-          value={value}
-          placeholder="250"
-          onChange={handleChange}
-          aria-describedby="price-later-hint"
-        />
-        <span aria-hidden="true">₽</span>
-      </label>
 
       <span id="price-later-hint" className="visually-hidden">
         Это поле можно заполнить позже
