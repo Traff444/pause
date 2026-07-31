@@ -833,15 +833,15 @@ function OnboardingIntro({ onContinue }: { onContinue: () => void }) {
 
       <section className="intro-copy" aria-labelledby="intro-title">
         <h1 id="intro-title">
-          <span className="intro-title-soft">НЕ ЗАПРЕЩАЕМ.</span>
-          <span className="intro-title-accent">ВОЗВРАЩАЕМ ВЫБОР.</span>
+          <img src={assetUrl('assets/onboarding-title.png')} alt="" aria-hidden="true" />
+          <span className="visually-hidden">НЕ ЗАПРЕЩАЕМ. ВОЗВРАЩАЕМ ВЫБОР.</span>
         </h1>
         <p>
-          Курение часто происходит автоматически — с кофе, стрессом или во время
+          Курение часто происходит автоматически: с кофе, во время стресса или
           перерыва.
         </p>
         <p>
-          Мы не боремся с привычкой. Помогаем заметить момент, отложить сигарету и
+          Мы не запрещаем. Помогаем заметить момент, отложить сигарету и
           постепенно вернуть себе выбор.
         </p>
       </section>
@@ -993,6 +993,7 @@ function Onboarding({
 
   useEffect(() => {
     [
+      'assets/onboarding-title.png',
       'assets/onboarding-choice.png',
       'assets/onboarding-price-screen.png',
       'assets/final-screen.png',
