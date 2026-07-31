@@ -1,0 +1,10 @@
+node_modules/
+dist/
+coverage/
+font-work/
+.DS_Store
+.brooks-lint-history.json
+*.local
+.env
+.env.*
+!.env.example
