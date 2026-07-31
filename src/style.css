@@ -441,7 +441,7 @@ input:focus-visible {
   width: 100%;
   max-width: none;
   height: auto;
-  transform: scale(1.2);
+  transform: translate3d(-4%, 28px, 0) scale(1.2);
   transform-origin: 50% 4%;
 }
 
@@ -455,13 +455,13 @@ input:focus-visible {
 }
 
 .entry-logo {
-  margin: 0 0 24px;
+  margin: 0 0 20px;
   color: #0642bb;
   font-family: 'Pauza Display', 'Manrope Variable', 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: clamp(58px, 16.5vw, 76px);
+  font-size: clamp(68px, 19.5vw, 92px);
   font-weight: 400;
   letter-spacing: 0.5px;
-  line-height: 0.96;
+  line-height: 0.94;
 }
 
 .entry-auth {
