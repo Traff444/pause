@@ -833,16 +833,16 @@ function OnboardingIntro({ onContinue }: { onContinue: () => void }) {
 
       <section className="intro-copy" aria-labelledby="intro-title">
         <h1 id="intro-title">
-          <img src={assetUrl('assets/onboarding-title.png')} alt="" aria-hidden="true" />
-          <span className="visually-hidden">НЕ ЗАПРЕЩАЕМ. ВОЗВРАЩАЕМ ВЫБОР.</span>
+          <span className="intro-title-soft">НЕ ЗАПРЕЩАЕМ.</span>
+          <span className="intro-title-accent">ВОЗВРАЩАЕМ ВЫБОР.</span>
         </h1>
         <p>
-          Курение часто происходит автоматически —<br />
-          вместе с кофе, стрессом или перерывом.<br />
-          Мы не боремся с этим.<br />
-          Мы помогаем заметить момент,<br />
-          немного отложить сигарету<br />
-          и постепенно изменить привычный ритуал.
+          Курение часто происходит автоматически — с кофе, стрессом или во время
+          перерыва.
+        </p>
+        <p>
+          Мы не боремся с привычкой. Помогаем заметить момент, отложить сигарету и
+          постепенно вернуть себе выбор.
         </p>
       </section>
 
@@ -850,16 +850,8 @@ function OnboardingIntro({ onContinue }: { onContinue: () => void }) {
         <img src={assetUrl('assets/onboarding-choice.png')} alt="" />
       </div>
 
-      <div className="intro-sequence" aria-label="Заметить, отложить, выбрать">
-        <span>ЗАМЕТИТЬ</span>
-        <ArrowRight />
-        <span>ОТЛОЖИТЬ</span>
-        <ArrowRight />
-        <span>ВЫБРАТЬ</span>
-      </div>
-
       <button className="intro-continue" type="button" onClick={onContinue}>
-        <span>ПРОДОЛЖИТЬ</span>
+        <span>Продолжить</span>
         <ArrowRight />
       </button>
     </main>
@@ -881,6 +873,12 @@ function FinalOnboardingScreen({
         alt=""
         aria-hidden="true"
       />
+
+      <div className="final-path-steps" aria-label="Заметить, отложить, выбрать">
+        <span className="final-path-step final-path-step-notice">Заметить</span>
+        <span className="final-path-step final-path-step-delay">Отложить</span>
+        <span className="final-path-step final-path-step-choose">Выбрать</span>
+      </div>
 
       <div className="visually-hidden">
         <span>3 из 3. Шаг 3 из 3.</span>
@@ -995,7 +993,6 @@ function Onboarding({
 
   useEffect(() => {
     [
-      'assets/onboarding-title.png',
       'assets/onboarding-choice.png',
       'assets/onboarding-price-screen.png',
       'assets/final-screen.png',

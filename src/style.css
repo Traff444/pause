@@ -141,9 +141,9 @@ input:focus-visible {
 
 .intro-progress > span {
   display: block;
-  margin: 0 0 13px 3px;
+  margin: 0 0 11px 3px;
   color: #0843ac;
-  font-size: clamp(17px, 4.5vw, 21px);
+  font-size: clamp(16px, 4vw, 17px);
   font-weight: 600;
 }
 
@@ -164,28 +164,47 @@ input:focus-visible {
 
 .intro-copy {
   width: 100%;
-  margin-top: clamp(18px, 5vw, 24px);
+  margin-top: clamp(22px, 5.5vw, 28px);
 }
 
 .intro-copy h1 {
-  margin: 0;
-  line-height: 0;
+  width: calc(100% - 36px);
+  margin: 0 auto;
+  font-family: 'Pauza Display', 'Manrope Variable', 'Manrope', sans-serif;
+  font-weight: 400;
+  letter-spacing: 0.2px;
+  line-height: 0.96;
 }
 
-.intro-copy h1 img {
+.intro-copy h1 span {
   display: block;
-  width: 100%;
-  height: auto;
+  white-space: nowrap;
+}
+
+.intro-title-soft {
+  color: #5673aa;
+  font-size: clamp(32px, 8.8vw, 38px);
+}
+
+.intro-title-accent {
+  margin-top: 0.12em;
+  color: #0642bb;
+  font-size: clamp(35px, 9.4vw, 41.5px);
 }
 
 .intro-copy p {
-  margin-top: clamp(28px, 7.8vw, 38px);
+  width: min(calc(100% - 64px), 392px);
+  margin-top: clamp(24px, 6.2vw, 30px);
   margin-bottom: 0;
-  color: #0b0b0c;
-  font-size: clamp(15px, 4.15vw, 19px);
-  font-weight: 500;
-  letter-spacing: -0.28px;
-  line-height: 1.28;
+  color: #363b46;
+  font-size: clamp(16px, 4.35vw, 18px);
+  font-weight: 400;
+  letter-spacing: -0.15px;
+  line-height: 1.48;
+}
+
+.intro-copy p + p {
+  margin-top: 10px;
 }
 
 .visually-hidden {
@@ -201,7 +220,7 @@ input:focus-visible {
 
 .intro-illustration {
   width: 100%;
-  margin-top: clamp(18px, 4.5vw, 24px);
+  margin-top: clamp(18px, 4.5vw, 22px);
   flex: 0 0 auto;
   line-height: 0;
 }
@@ -212,43 +231,24 @@ input:focus-visible {
   height: auto;
 }
 
-.intro-sequence {
-  display: grid;
-  width: calc(100% - 76px);
-  margin: -2px auto 0;
-  grid-template-columns: auto 1fr auto 1fr auto;
-  align-items: center;
-  gap: 9px;
-  color: #0843ad;
-  font-size: clamp(12px, 3.35vw, 16px);
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.intro-sequence svg {
-  width: 22px;
-  justify-self: center;
-  stroke-width: 1.7;
-}
-
 .intro-continue {
   position: relative;
   display: grid;
-  width: calc(100% - 48px);
-  min-height: clamp(70px, 18.5vw, 86px);
-  margin: clamp(48px, 10.5vw, 58px) auto 0;
-  padding: 0 28px;
-  grid-template-columns: 28px minmax(0, 1fr) 28px;
+  width: calc(100% - 64px);
+  min-height: clamp(64px, 15vw, 72px);
+  margin: clamp(28px, 7vw, 34px) auto 0;
+  padding: 0 24px;
+  grid-template-columns: 25px minmax(0, 1fr) 25px;
   align-items: center;
   border: 0;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: 0 16px 38px rgba(40, 36, 31, 0.12);
+  background: rgba(255, 255, 255, 0.94);
+  box-shadow: 0 12px 28px rgba(40, 36, 31, 0.09);
   color: #090909;
-  font-size: clamp(16px, 4vw, 19px);
-  font-weight: 700;
+  font-size: clamp(17px, 4.2vw, 18px);
+  font-weight: 600;
   cursor: pointer;
-  transition: transform 90ms ease-out;
+  transition: transform 90ms ease-out, box-shadow 160ms ease-out;
 }
 
 .intro-continue::before {
@@ -256,13 +256,14 @@ input:focus-visible {
 }
 
 .intro-continue svg {
-  width: 27px;
-  height: 27px;
+  width: 25px;
+  height: 25px;
   stroke-width: 1.7;
 }
 
 .intro-continue:active {
-  transform: scale(0.985);
+  transform: scale(0.99);
+  box-shadow: 0 8px 20px rgba(40, 36, 31, 0.08);
 }
 
 .final-screen {
@@ -280,6 +281,45 @@ input:focus-visible {
   display: block;
   width: 100%;
   height: auto;
+}
+
+.final-path-steps {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  color: #0843ad;
+  font-size: clamp(11px, 3vw, 14px);
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.final-path-step {
+  position: absolute;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.92);
+  animation: path-step-in 420ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.final-path-step-notice {
+  top: 79.6%;
+  left: 42%;
+  animation-delay: 180ms;
+  transform: rotate(-4deg);
+}
+
+.final-path-step-delay {
+  top: 72.8%;
+  left: 51.5%;
+  animation-delay: 300ms;
+  transform: rotate(3deg);
+}
+
+.final-path-step-choose {
+  top: 65.9%;
+  left: 46%;
+  animation-delay: 420ms;
+  transform: rotate(-2deg);
 }
 
 .final-back-hotspot,
@@ -2151,6 +2191,13 @@ input::placeholder {
   from {
     transform: translateY(5px);
     opacity: 0;
+  }
+}
+
+@keyframes path-step-in {
+  from {
+    opacity: 0;
+    translate: 0 6px;
   }
 }
 
