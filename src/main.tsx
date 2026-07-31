@@ -674,7 +674,6 @@ function EntryScreen({
 
       <section className="entry-content" aria-labelledby="entry-title">
         <h1 className="entry-logo" id="entry-title">ПАУЗА</h1>
-        <p className="entry-tagline">Не запрещаем.<br />Помогаем выбрать момент.</p>
 
         {emailAuth ? (
           <form
