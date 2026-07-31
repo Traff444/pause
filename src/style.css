@@ -437,27 +437,29 @@ input:focus-visible {
 
 .entry-hero img {
   display: block;
-  width: 100%;
+  width: 106%;
+  max-width: none;
   height: auto;
+  margin-left: -4%;
 }
 
 .entry-content {
   position: relative;
   z-index: 1;
   width: min(calc(100% - 56px), 338px);
-  margin: 9px auto 0;
+  margin: -30px auto 0;
   padding-bottom: calc(24px + env(safe-area-inset-bottom));
   text-align: center;
 }
 
 .entry-logo {
-  margin: 0 0 20px;
+  margin: 0 0 18px;
   color: #0642bb;
   font-family: 'Pauza Display', 'Manrope Variable', 'Manrope', -apple-system, BlinkMacSystemFont, sans-serif;
-  font-size: clamp(68px, 19.5vw, 92px);
+  font-size: clamp(72px, 20.5vw, 98px);
   font-weight: 400;
   letter-spacing: 0.5px;
-  line-height: 0.94;
+  line-height: 0.93;
 }
 
 .entry-auth {
