@@ -1,6 +1,6 @@
 @font-face {
   font-family: 'Pauza Display';
-  src: url('./assets/PauzaDisplay.woff2') format('woff2');
+  src: url('./assets/PauzaDisplay.ttf') format('truetype');
   font-display: swap;
 }
 
