@@ -150,6 +150,7 @@ function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [lapseOpen, setLapseOpen] = useState(false);
   const [snackbar, setSnackbar] = useState<SnackbarState>();
+  const screenRef = useRef<HTMLElement | null>(null);
   const demoScene = useMemo(
     () => (import.meta.env.DEV ? new URLSearchParams(window.location.search).get('demo') : null),
     [],
@@ -464,12 +465,16 @@ function App() {
     if (demoState) return;
     update({ activeTab });
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    window.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
+    screenRef.current?.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
   };
 
   return (
     <main className="app-shell">
-      <section className="screen" aria-live="polite">
+      <section
+        ref={screenRef}
+        className={`screen screen-${shownState.activeTab}`}
+        aria-live="polite"
+      >
         <div className="tab-panel" key={shownState.activeTab}>
           {shownState.activeTab === 'today' && (
             <TodayScreen
@@ -722,7 +727,6 @@ function EntryScreen({
                 placeholder="name@example.com"
                 aria-label="Электронная почта"
                 onChange={(event) => setEmail(event.target.value)}
-                autoFocus
               />
             </label>
             <label className="entry-auth-field">
