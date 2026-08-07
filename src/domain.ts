@@ -32,6 +32,7 @@ export type AppState = {
   baseline?: Baseline;
   goal?: number;
   dailyGoals: Record<string, number>;
+  dismissedGamePromptAnchor?: number;
   skipStartedAt?: number;
   skippedCount: number;
   activityDone?: string;
@@ -157,11 +158,10 @@ export function secondsUntilGoal(
   events: SmokingEvent[],
   goalMinutes: number | undefined,
   now = Date.now(),
-  skipStartedAt?: number,
 ) {
   if (!goalMinutes) return 0;
   const eventsList = activeEvents(events).filter((event) => event.occurredAt <= now);
-  const anchor = skipStartedAt ?? eventsList.at(-1)?.occurredAt;
+  const anchor = eventsList.at(-1)?.occurredAt;
   if (!anchor) return 0;
   return Math.max(0, Math.ceil((anchor + goalMinutes * minute - now) / 1000));
 }

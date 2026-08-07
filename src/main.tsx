@@ -82,6 +82,8 @@ import {
   type PasswordAuthMode,
 } from './auth';
 import { clearAppState, loadAppState, saveAppState } from './storage';
+import { FallingBlocksGame } from './FallingBlocksGame';
+import { Merge2048Game } from './Merge2048Game';
 import './style.css';
 
 const WEEK_LABELS = [
@@ -155,10 +157,17 @@ function App() {
     () => (import.meta.env.DEV ? new URLSearchParams(window.location.search).get('demo') : null),
     [],
   );
-  const demoState = useMemo(
-    () => (demoScene ? createDemoState(demoScene) : undefined),
-    [demoScene],
+  const gameDemoEnabled = demoScene === 'game';
+  const gameDemoComplete =
+    gameDemoEnabled && new URLSearchParams(window.location.search).get('gameRemaining') === '0';
+  const [gameDemoState, setGameDemoState] = useState<AppState | undefined>(() =>
+    gameDemoEnabled ? createGameDemoState(Date.now(), gameDemoComplete) : undefined,
   );
+  const staticDemoState = useMemo(
+    () => (demoScene && !gameDemoEnabled ? createDemoState(demoScene) : undefined),
+    [demoScene, gameDemoEnabled],
+  );
+  const demoState = gameDemoState ?? staticDemoState;
   const onboardingPreview = useMemo<OnboardingPreview | undefined>(() => {
     if (!import.meta.env.DEV) return undefined;
     const scene = new URLSearchParams(window.location.search).get('onboarding');
@@ -408,13 +417,20 @@ function App() {
   }
 
   const shownState = demoState ?? state;
+  const setWorkingState = (recipe: (current: AppState) => AppState) => {
+    if (staticDemoState) return;
+    if (gameDemoEnabled) {
+      setGameDemoState((current) => (current ? recipe(current) : current));
+      return;
+    }
+    setState((current) => (current ? recipe(current) : current));
+  };
   const update = (patch: Partial<AppState>) => {
-    if (demoState) return;
-    setState((current) => (current ? { ...current, ...patch } : current));
+    setWorkingState((current) => ({ ...current, ...patch }));
   };
 
   const recordSmoke = () => {
-    if (demoState) return;
+    if (staticDemoState) return;
     const timestamp = Date.now();
     setNow(timestamp);
     const event: SmokingEvent = {
@@ -422,15 +438,11 @@ function App() {
       occurredAt: timestamp,
       createdAt: timestamp,
     };
-    setState((current) =>
-      current
-        ? {
-            ...current,
-            events: [...current.events, event],
-            skipStartedAt: undefined,
-          }
-        : current,
-    );
+    setWorkingState((current) => ({
+      ...current,
+      events: [...current.events, event],
+      skipStartedAt: undefined,
+    }));
     setSnackbar({ kind: 'undo', eventId: event.id, message: 'Отмечено!' });
     window.setTimeout(
       () =>
@@ -448,21 +460,17 @@ function App() {
 
   const undoEvent = (eventId: string) => {
     const timestamp = Date.now();
-    setState((current) =>
-      current
-        ? {
-            ...current,
-            events: current.events.map((event) =>
-              event.id === eventId ? { ...event, deletedAt: timestamp } : event,
-            ),
-          }
-        : current,
-    );
+    setWorkingState((current) => ({
+      ...current,
+      events: current.events.map((event) =>
+        event.id === eventId ? { ...event, deletedAt: timestamp } : event,
+      ),
+    }));
     setSnackbar({ kind: 'message', message: 'Последняя отметка отменена' });
   };
 
   const selectTab = (activeTab: TabId) => {
-    if (demoState) return;
+    if (staticDemoState) return;
     update({ activeTab });
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     screenRef.current?.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
@@ -482,13 +490,7 @@ function App() {
               now={now}
               onOpenSettings={() => setSettingsOpen(true)}
               onSmoke={recordSmoke}
-              onSkip={() => {
-                update({
-                  skipStartedAt: Date.now(),
-                  skippedCount: shownState.skippedCount + 1,
-                });
-                setSnackbar({ kind: 'message', message: 'Отлично, продолжаем паузу' });
-              }}
+              onDismissGamePrompt={(anchor) => update({ dismissedGamePromptAnchor: anchor })}
               onRecordLapse={recordLapse}
             />
           )}
@@ -1114,29 +1116,49 @@ function TodayScreen({
   now,
   onOpenSettings,
   onSmoke,
-  onSkip,
+  onDismissGamePrompt,
   onRecordLapse,
 }: {
   state: AppState;
   now: number;
   onOpenSettings: () => void;
   onSmoke: () => void;
-  onSkip: () => void;
+  onDismissGamePrompt: (anchor: number) => void;
   onRecordLapse: () => void;
 }) {
   const [supportOpen, setSupportOpen] = useState(false);
   const [supportSeconds, setSupportSeconds] = useState(180);
   const [supportRunning, setSupportRunning] = useState(false);
+  const [activeGame, setActiveGame] = useState<'blocks' | 'merge'>();
   const todayEvents = eventsToday(state.events, now);
   const sinceLast = minutesSinceLastSmoking(state.events, now);
   const goal = state.dailyGoals[todayKey(now)] ?? state.goal;
-  const remaining = secondsUntilGoal(state.events, goal, now, state.skipStartedAt);
+  const remaining = secondsUntilGoal(state.events, goal, now);
+  const latestEventAnchor = activeEvents(state.events)
+    .filter((event) => event.occurredAt <= now)
+    .at(-1)?.occurredAt;
+  const countdownAnchor = latestEventAnchor;
+  const gamePromptDismissed =
+    countdownAnchor !== undefined && state.dismissedGamePromptAnchor === countdownAnchor;
+  const intervalProgress = goal
+    ? Math.min(100, Math.max(0, ((goal * 60 - remaining) / (goal * 60)) * 100))
+    : 0;
 
   useEffect(() => {
     if (!supportRunning || supportSeconds <= 0) return;
     const timer = window.setInterval(() => setSupportSeconds((value) => Math.max(0, value - 1)), 1_000);
     return () => window.clearInterval(timer);
   }, [supportRunning, supportSeconds]);
+
+  if (activeGame && state.phase !== 'observation' && state.phase !== 'quit' && goal && countdownAnchor) {
+    const gameProps = {
+      remainingSeconds: remaining,
+      onClose: () => setActiveGame(undefined),
+    };
+    return activeGame === 'blocks'
+      ? <FallingBlocksGame {...gameProps} />
+      : <Merge2048Game {...gameProps} />;
+  }
 
   const metrics = (
     <div className="metric-card">
@@ -1210,10 +1232,66 @@ function TodayScreen({
     );
   }
 
+  if (state.phase !== 'observation' && goal && sinceLast !== undefined && remaining > 0) {
+    return (
+      <section className={`pause-waiting ${gamePromptDismissed ? 'compact' : ''}`}>
+        <button
+          className="icon-button pause-settings-button"
+          onClick={onOpenSettings}
+          aria-label="Настройки"
+        >
+          <Settings />
+        </button>
+        <p className="section-label">ТРЕНИРУЕМ ПАУЗУ</p>
+        <h1>Осталось</h1>
+        <strong className="pause-waiting-timer" aria-live="off">{formatTimer(remaining)}</strong>
+        <p className="pause-waiting-goal">Сегодняшняя цель — {goal} минут</p>
+        <Progress value={intervalProgress} />
+
+        {!gamePromptDismissed ? (
+          <section className="game-invite-card" data-testid="game-invite">
+            <div className="pause-blocks-mark" aria-hidden="true">
+              <span /><span /><span /><span /><span />
+            </div>
+            <div>
+              <p className="section-label">ПАУЗА: ИГРЫ</p>
+              <h2>Переключимся на пару минут?</h2>
+              <p>Выбери спокойную игру, пока желание проходит.</p>
+            </div>
+            <GameChoiceButtons
+              onBlocks={() => setActiveGame('blocks')}
+              onMerge={() => setActiveGame('merge')}
+            />
+            <button
+              type="button"
+              className="button secondary-button full"
+              onClick={() => countdownAnchor && onDismissGamePrompt(countdownAnchor)}
+            >
+              ОСТАТЬСЯ НА ТАЙМЕРЕ
+            </button>
+          </section>
+        ) : (
+          <div className="compact-game-choices">
+            <span>ВЫБЕРИ ИГРУ</span>
+            <GameChoiceButtons
+              compact
+              onBlocks={() => setActiveGame('blocks')}
+              onMerge={() => setActiveGame('merge')}
+            />
+          </div>
+        )}
+
+        <button type="button" className="text-button pause-smoke-action" onClick={onSmoke}>
+          ОТМЕТИТЬ СИГАРЕТУ
+        </button>
+      </section>
+    );
+  }
+
   return (
     <>
       <StageHeader state={state} now={now} onSettings={onOpenSettings} />
-      {metrics}
+      {(state.phase === 'observation' || !goal || sinceLast === undefined) && metrics}
 
       {state.phase === 'observation' || !goal || sinceLast === undefined ? (
         <div className="main-action">
@@ -1239,12 +1317,50 @@ function TodayScreen({
         <section className="choice-state">
           <div className="choice-check"><Check /></div>
           <h2>Пауза уже пройдена</h2>
-          <p>Ты подождал {goal} минут. Теперь решение снова у тебя.</p>
-          <button className="button primary-button full" onClick={onSmoke}>ИДУ КУРИТЬ</button>
-          <button className="button secondary-button full" onClick={onSkip}>ПРОПУСКАЮ</button>
+          <p>Между сигаретами уже {formatMinutes(sinceLast)}. Минимум — {formatMinutes(goal)}.</p>
+          <button className="smoke-button choice-smoke-button" onClick={onSmoke}>ИДУ КУРИТЬ</button>
+          <p className="replay-game-label">ИГРАТЬ ЕЩЁ</p>
+          <GameChoiceButtons
+            compact
+            onBlocks={() => setActiveGame('blocks')}
+            onMerge={() => setActiveGame('merge')}
+          />
         </section>
       )}
     </>
+  );
+}
+
+function GameChoiceButtons({
+  onBlocks,
+  onMerge,
+  compact = false,
+}: {
+  onBlocks: () => void;
+  onMerge: () => void;
+  compact?: boolean;
+}) {
+  return (
+    <div className={`game-choice-grid ${compact ? 'compact' : ''}`}>
+      <button type="button" onClick={onBlocks} aria-label="Играть в Блоки">
+        <span className="game-choice-icon blocks-choice-icon" aria-hidden="true">
+          <i /><i /><i />
+        </span>
+        <span>
+          <strong>БЛОКИ</strong>
+          {!compact && <small>Фигуры падают</small>}
+        </span>
+      </button>
+      <button type="button" onClick={onMerge} aria-label="Играть в 2048">
+        <span className="game-choice-icon merge-choice-icon" aria-hidden="true">
+          <i>2</i><i>4</i><i>8</i><i>16</i>
+        </span>
+        <span>
+          <strong>2048</strong>
+          {!compact && <small>Соединяй пары</small>}
+        </span>
+      </button>
+    </div>
   );
 }
 
@@ -1922,6 +2038,28 @@ function createScenario(scene: 'observation' | 'reduction' | 'plan' | 'health' |
     };
   }
   return base;
+}
+
+function createGameDemoState(now: number, complete = false): AppState {
+  const base = createDemoState('health', now);
+  const lastEvent: SmokingEvent = {
+    id: 'demo-game-last',
+    occurredAt: now - (complete ? 20 : 12) * minute,
+    createdAt: now - (complete ? 20 : 12) * minute,
+  };
+  return {
+    ...base,
+    activeTab: 'today',
+    phase: 'reduction',
+    events: [
+      ...base.events.filter((event) => event.occurredAt < lastEvent.occurredAt),
+      lastEvent,
+    ],
+    goal: 17,
+    dailyGoals: { ...base.dailyGoals, [todayKey(now)]: 17 },
+    dismissedGamePromptAnchor: undefined,
+    skipStartedAt: undefined,
+  };
 }
 
 function optionalNumber(value: string) {

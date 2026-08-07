@@ -121,6 +121,20 @@ describe('timer and reduction', () => {
     expect(secondsUntilGoal(events, 25, now)).toBe(15 * 60);
   });
 
+  it('stays complete while the user waits longer and restarts only after a new cigarette', () => {
+    const firstSmoke = new Date(2026, 6, 10, 8).getTime();
+    const firstEvent = event('first', firstSmoke);
+
+    expect(secondsUntilGoal([firstEvent], 60, firstSmoke + 56 * minute)).toBe(4 * 60);
+    expect(secondsUntilGoal([firstEvent], 60, firstSmoke + 66 * minute)).toBe(0);
+    expect(secondsUntilGoal([firstEvent], 60, firstSmoke + 90 * minute)).toBe(0);
+
+    const secondSmoke = firstSmoke + 90 * minute;
+    expect(
+      secondsUntilGoal([firstEvent, event('second', secondSmoke)], 60, secondSmoke),
+    ).toBe(60 * 60);
+  });
+
   it('never returns a negative not-smoked count', () => {
     const now = new Date(2026, 6, 20, 12).getTime();
     const state = {
