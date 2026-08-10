@@ -1676,24 +1676,60 @@ em {
   gap: 6px;
 }
 
-.merge-summary {
-  display: flex;
-  width: 100%;
-  min-height: 25px;
-  padding: 0 8px;
-  align-items: center;
-  justify-content: space-between;
-  color: var(--blue);
-  font-size: 11px;
-  font-weight: 800;
+.merge-game-header {
+  grid-template-columns: 44px minmax(0, 1fr) 88px;
 }
 
-.merge-summary strong {
+.merge-header-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.merge-header-actions button {
+  width: 42px;
+  flex: 0 0 42px;
   color: var(--blue);
-  font-size: 19px;
+}
+
+.merge-header-actions button:last-child {
+  color: var(--ink);
+}
+
+.merge-summary {
+  display: grid;
+  width: 100%;
+  min-height: 48px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  color: var(--blue);
+}
+
+.merge-stat {
+  display: flex;
+  min-width: 0;
+  padding: 7px 12px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  border: 1px solid rgba(18, 70, 184, 0.16);
+  border-radius: 16px;
+  background: rgba(18, 70, 184, 0.045);
+}
+
+.merge-stat span {
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.merge-stat strong {
+  color: var(--blue);
+  font-size: 20px;
+  font-variant-numeric: tabular-nums;
 }
 
 .merge-board-card {
+  position: relative;
   display: grid;
   width: min(100%, calc(100dvh - 185px), 440px);
   flex: 0 1 auto;
@@ -1711,38 +1747,200 @@ em {
   width: 100%;
   height: 100%;
   touch-action: none;
+  transition: opacity 180ms ease-out;
 }
 
-.merge-controls {
-  display: grid;
-  width: min(100%, 292px);
-  grid-template-columns: repeat(4, 1fr);
+.merge-board-card.tutorial-dimmed .merge-canvas {
+  opacity: 0.56;
+}
+
+.merge-practice-hint {
+  position: absolute;
+  z-index: 3;
+  bottom: 18px;
+  left: 50%;
+  display: flex;
+  min-height: 48px;
+  padding: 0 18px;
+  transform: translateX(-50%);
+  align-items: center;
   gap: 12px;
+  border: 1px solid rgba(18, 70, 184, 0.18);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 24px rgba(18, 70, 184, 0.14);
+  color: var(--blue);
+  font-size: 14px;
+  font-weight: 800;
+  white-space: nowrap;
+  pointer-events: none;
+  animation: merge-practice-pulse 1.25s ease-in-out infinite;
 }
 
-.merge-controls button {
-  display: grid;
-  width: 58px;
-  height: 58px;
-  padding: 0;
-  place-items: center;
-  justify-self: center;
-  border: 1px solid #cbd1de;
-  border-radius: 50%;
+.merge-practice-hint svg {
+  width: 26px;
+  height: 26px;
+  animation: merge-practice-arrow 1.25s ease-in-out infinite;
+}
+
+.merge-tutorial-backdrop {
+  position: absolute;
+  z-index: 10;
+  inset: 0;
+  display: flex;
+  padding: 12px 12px calc(12px + env(safe-area-inset-bottom));
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(19, 27, 45, 0.16);
+}
+
+.merge-tutorial-card {
+  position: relative;
+  width: 100%;
+  max-height: calc(100dvh - 80px);
+  padding: 16px 20px 18px;
+  overflow-y: auto;
+  border: 1px solid rgba(18, 70, 184, 0.1);
+  border-radius: 26px;
   background: #fff;
+  box-shadow: 0 16px 44px rgba(20, 31, 55, 0.16);
+  text-align: center;
+  animation: merge-tutorial-in 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.merge-tutorial-step {
+  display: block;
+  min-height: 18px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 18px;
+  text-align: right;
+}
+
+.merge-tutorial-example {
+  display: flex;
+  min-height: 80px;
+  margin: 2px 0 12px;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   color: var(--blue);
+}
+
+.merge-tutorial-example span {
+  display: grid;
+  width: 66px;
+  height: 66px;
+  place-items: center;
+  border: 1px solid #c8d3e8;
+  border-radius: 14px;
+  background: var(--paper);
+  color: var(--blue);
+  font-size: 31px;
+  font-weight: 800;
+}
+
+.merge-tutorial-example svg {
+  width: 48px;
+  height: 48px;
+  margin-left: 4px;
+  stroke-width: 1.7;
+}
+
+.merge-tutorial-card h2 {
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(21px, 5.7vw, 26px);
+  line-height: 1.18;
+}
+
+.merge-tutorial-card p {
+  max-width: 390px;
+  margin: 12px auto 18px;
+  color: #606572;
+  font-size: clamp(14px, 3.8vw, 16px);
+  line-height: 1.45;
+}
+
+.merge-tutorial-primary {
+  width: 100%;
+  min-height: 58px;
+  padding: 0 24px;
+  border: 0;
+  border-radius: 18px;
+  background: var(--blue);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 800;
   cursor: pointer;
 }
 
-.merge-controls button:last-child {
-  border-color: var(--blue);
-  background: var(--blue);
-  color: #fff;
+.merge-tutorial-primary:active {
+  background: var(--blue-dark);
+  transform: scale(0.99);
 }
 
-.merge-controls svg {
-  width: 22px;
-  height: 22px;
+.merge-tutorial-skip {
+  min-height: 38px;
+  margin-top: 6px;
+  padding: 0 18px;
+  border: 0;
+  background: transparent;
+  color: var(--blue);
+  font-size: 15px;
+  font-weight: 650;
+  cursor: pointer;
+}
+
+.merge-tutorial-success {
+  padding-top: 24px;
+}
+
+.merge-success-icon {
+  display: grid;
+  width: 64px;
+  height: 64px;
+  margin: 0 auto 16px;
+  place-items: center;
+  border: 1px solid #b8d2ed;
+  border-radius: 50%;
+  background: #dceaf8;
+  color: var(--blue);
+}
+
+.merge-success-icon svg {
+  width: 34px;
+  height: 34px;
+  stroke-width: 2.6;
+}
+
+.merge-swipe-hint {
+  margin: 2px 0 0;
+  color: var(--blue);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+@keyframes merge-tutorial-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes merge-practice-pulse {
+  0%, 100% { box-shadow: 0 8px 24px rgba(18, 70, 184, 0.11); }
+  50% { box-shadow: 0 8px 30px rgba(18, 70, 184, 0.22); }
+}
+
+@keyframes merge-practice-arrow {
+  0%, 100% { transform: translateX(0); }
+  50% { transform: translateX(7px); }
 }
 
 .quit-hero {
@@ -2936,6 +3134,46 @@ input::placeholder {
     height: 70px;
   }
 
+  .merge-tutorial-card {
+    padding: 12px 16px 14px;
+  }
+
+  .merge-tutorial-example {
+    min-height: 62px;
+    margin-bottom: 8px;
+  }
+
+  .merge-tutorial-example span {
+    width: 54px;
+    height: 54px;
+    border-radius: 12px;
+    font-size: 27px;
+  }
+
+  .merge-tutorial-example svg {
+    width: 40px;
+    height: 40px;
+  }
+
+  .merge-tutorial-card p {
+    margin-top: 9px;
+    margin-bottom: 13px;
+  }
+
+  .merge-tutorial-primary {
+    min-height: 52px;
+  }
+
+  .merge-tutorial-success {
+    padding-top: 18px;
+  }
+
+  .merge-success-icon {
+    width: 54px;
+    height: 54px;
+    margin-bottom: 12px;
+  }
+
 }
 
 @media (max-width: 370px) {
@@ -2994,6 +3232,32 @@ input::placeholder {
 
   .blocks-goal-card > strong {
     font-size: 16px;
+  }
+
+  .merge-game-header {
+    grid-template-columns: 42px minmax(0, 1fr) 82px;
+  }
+
+  .merge-game-header strong {
+    font-size: 12px;
+  }
+
+  .merge-header-actions button {
+    width: 39px;
+    flex-basis: 39px;
+  }
+
+  .merge-tutorial-backdrop {
+    padding-right: 8px;
+    padding-left: 8px;
+  }
+
+  .merge-tutorial-card {
+    border-radius: 22px;
+  }
+
+  .merge-tutorial-example {
+    gap: 7px;
   }
 }
 

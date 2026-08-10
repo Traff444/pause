@@ -1129,7 +1129,11 @@ function TodayScreen({
   const [supportOpen, setSupportOpen] = useState(false);
   const [supportSeconds, setSupportSeconds] = useState(180);
   const [supportRunning, setSupportRunning] = useState(false);
-  const [activeGame, setActiveGame] = useState<'blocks' | 'merge'>();
+  const [activeGame, setActiveGame] = useState<'blocks' | 'merge' | undefined>(() => {
+    if (!import.meta.env.DEV) return undefined;
+    const preview = new URLSearchParams(window.location.search).get('activeGame');
+    return preview === 'blocks' || preview === 'merge' ? preview : undefined;
+  });
   const todayEvents = eventsToday(state.events, now);
   const sinceLast = minutesSinceLastSmoking(state.events, now);
   const goal = state.dailyGoals[todayKey(now)] ?? state.goal;
