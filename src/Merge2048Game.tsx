@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, X } from 'lucide-react';
+import { ArrowRight, Check, ChevronLeft, CircleHelp, X } from 'lucide-react';
 import { formatTimer } from './domain';
 import {
   MERGE_BOARD_SIZE,
   advanceMergeGame,
   createMergeGameState,
+  createMergeTutorialState,
   moveMergeGame,
   setMergeGamePaused,
   type MergeDirection,
@@ -16,6 +17,32 @@ type Merge2048GameProps = {
   remainingSeconds: number;
   onClose: () => void;
 };
+
+type MergeTutorialMode = 'intro' | 'practice' | 'success';
+type MergeTutorialSource = 'first-run' | 'help';
+
+const MERGE_TUTORIAL_STORAGE_KEY = 'pauza:merge-2048-tutorial:v1';
+
+function shouldShowMergeTutorial() {
+  const override = import.meta.env.DEV
+    ? new URLSearchParams(window.location.search).get('mergeTutorial')
+    : undefined;
+  if (override === 'show') return true;
+  if (override === 'skip') return false;
+  try {
+    return window.localStorage.getItem(MERGE_TUTORIAL_STORAGE_KEY) !== 'seen';
+  } catch {
+    return true;
+  }
+}
+
+function rememberMergeTutorial() {
+  try {
+    window.localStorage.setItem(MERGE_TUTORIAL_STORAGE_KEY, 'seen');
+  } catch {
+    // The tutorial can still be completed when storage is unavailable.
+  }
+}
 
 const TILE_COLORS: Record<number, { fill: string; text: string; stroke: string }> = {
   2: { fill: '#ffffff', text: '#1246b8', stroke: '#c8d3e8' },
@@ -117,11 +144,20 @@ export function Merge2048Game({ remainingSeconds, onClose }: Merge2048GameProps)
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const screenRef = useRef<HTMLElement | null>(null);
   const pointerStart = useRef<{ x: number; y: number } | undefined>(undefined);
-  const engineRef = useRef(createMergeGameState(Date.now()));
+  const [showFirstTutorial] = useState(shouldShowMergeTutorial);
+  const engineRef = useRef(
+    showFirstTutorial ? createMergeTutorialState(Date.now()) : createMergeGameState(Date.now()),
+  );
   const remainingRef = useRef(remainingSeconds);
   const [state, setState] = useState(engineRef.current);
+  const [tutorialMode, setTutorialMode] = useState<MergeTutorialMode | undefined>(
+    showFirstTutorial ? 'intro' : undefined,
+  );
+  const [tutorialSource, setTutorialSource] = useState<MergeTutorialSource>('first-run');
+  const tutorialModeRef = useRef(tutorialMode);
   const goalReached = remainingSeconds <= 0;
   remainingRef.current = remainingSeconds;
+  tutorialModeRef.current = tutorialMode;
 
   const commit = useCallback((next: MergeGameState) => {
     engineRef.current = next;
@@ -137,6 +173,31 @@ export function Merge2048Game({ remainingSeconds, onClose }: Merge2048GameProps)
     (direction: MergeDirection) => update((current) => moveMergeGame(current, direction)),
     [update],
   );
+
+  const moveWithTutorial = useCallback(
+    (direction: MergeDirection) => {
+      const mode = tutorialModeRef.current;
+      if (mode === 'intro' || mode === 'success') return;
+      if (mode === 'practice') {
+        if (direction !== 'right') return;
+        update((current) => moveMergeGame(current, direction));
+        setTutorialMode('success');
+        return;
+      }
+      move(direction);
+    },
+    [move, update],
+  );
+
+  const closeTutorial = useCallback(() => {
+    rememberMergeTutorial();
+    setTutorialMode(undefined);
+  }, []);
+
+  const openHelp = () => {
+    setTutorialSource('help');
+    setTutorialMode('intro');
+  };
 
   useEffect(() => {
     let frame = 0;
@@ -183,7 +244,9 @@ export function Merge2048Game({ remainingSeconds, onClose }: Merge2048GameProps)
         },
         board: current.board,
         moves: current.moves,
+        score: current.score,
         maxTile: current.maxTile,
+        tutorial: tutorialModeRef.current ?? 'closed',
         emptyCells: current.board.flat().filter((value) => value === 0).length,
         resetRemainingMs: Math.max(0, Math.round(current.resetRemainingMs)),
       });
@@ -199,10 +262,10 @@ export function Merge2048Game({ remainingSeconds, onClose }: Merge2048GameProps)
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'ArrowLeft') move('left');
-      else if (event.key === 'ArrowRight') move('right');
-      else if (event.key === 'ArrowUp') move('up');
-      else if (event.key === 'ArrowDown') move('down');
+      if (event.key === 'ArrowLeft') moveWithTutorial('left');
+      else if (event.key === 'ArrowRight') moveWithTutorial('right');
+      else if (event.key === 'ArrowUp') moveWithTutorial('up');
+      else if (event.key === 'ArrowDown') moveWithTutorial('down');
       else if (event.key.toLowerCase() === 'f') {
         if (document.fullscreenElement) void document.exitFullscreen();
         else void screenRef.current?.requestFullscreen();
@@ -213,7 +276,7 @@ export function Merge2048Game({ remainingSeconds, onClose }: Merge2048GameProps)
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [move]);
+  }, [moveWithTutorial]);
 
   const finishPointerGesture = (x: number, y: number) => {
     const start = pointerStart.current;
@@ -222,8 +285,8 @@ export function Merge2048Game({ remainingSeconds, onClose }: Merge2048GameProps)
     const deltaX = x - start.x;
     const deltaY = y - start.y;
     if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < 24) return;
-    if (Math.abs(deltaX) > Math.abs(deltaY)) move(deltaX > 0 ? 'right' : 'left');
-    else move(deltaY > 0 ? 'down' : 'up');
+    if (Math.abs(deltaX) > Math.abs(deltaY)) moveWithTutorial(deltaX > 0 ? 'right' : 'left');
+    else moveWithTutorial(deltaY > 0 ? 'down' : 'up');
   };
 
   return createPortal(
@@ -234,14 +297,19 @@ export function Merge2048Game({ remainingSeconds, onClose }: Merge2048GameProps)
       aria-modal="true"
       aria-label="Игра Пауза: 2048"
     >
-      <header className="blocks-game-header">
+      <header className="blocks-game-header merge-game-header">
         <button type="button" onClick={onClose} aria-label="Вернуться к выбору игры">
           <ChevronLeft />
         </button>
         <strong>ПАУЗА: 2048</strong>
-        <button type="button" onClick={onClose} aria-label="Закрыть игру">
-          <X />
-        </button>
+        <div className="merge-header-actions">
+          <button type="button" onClick={openHelp} aria-label="Как играть в 2048">
+            <CircleHelp />
+          </button>
+          <button type="button" onClick={onClose} aria-label="Закрыть игру">
+            <X />
+          </button>
+        </div>
       </header>
 
       <section className={`blocks-goal-card ${goalReached ? 'complete' : ''}`} aria-live="polite">
@@ -250,12 +318,21 @@ export function Merge2048Game({ remainingSeconds, onClose }: Merge2048GameProps)
         <div className="blocks-goal-line"><span /></div>
       </section>
 
-      <div className="merge-summary" aria-label={`Максимальная плитка ${state.maxTile}`}>
-        <span>СОБЕРИ ПАРЫ</span>
-        <strong>{state.maxTile}</strong>
+      <div
+        className="merge-summary"
+        aria-label={`Очки ${state.score}. Лучшая плитка ${state.maxTile}`}
+      >
+        <div className="merge-stat">
+          <span>ОЧКИ</span>
+          <strong data-testid="merge-score">{state.score}</strong>
+        </div>
+        <div className="merge-stat">
+          <span>ЛУЧШАЯ ПЛИТКА</span>
+          <strong>{state.maxTile}</strong>
+        </div>
       </div>
 
-      <div className="merge-board-card">
+      <div className={`merge-board-card ${tutorialMode === 'intro' ? 'tutorial-dimmed' : ''}`}>
         <canvas
           ref={canvasRef}
           className="merge-canvas"
@@ -269,14 +346,74 @@ export function Merge2048Game({ remainingSeconds, onClose }: Merge2048GameProps)
             pointerStart.current = undefined;
           }}
         />
+        {tutorialMode === 'practice' && (
+          <div className="merge-practice-hint" role="status">
+            <span>Свайпни вправо</span>
+            <ArrowRight />
+          </div>
+        )}
       </div>
 
-      <div className="merge-controls" aria-label="Управление игрой">
-        <button type="button" onClick={() => move('left')} aria-label="Сдвинуть влево"><ArrowLeft /></button>
-        <button type="button" onClick={() => move('up')} aria-label="Сдвинуть вверх"><ArrowUp /></button>
-        <button type="button" onClick={() => move('down')} aria-label="Сдвинуть вниз"><ArrowDown /></button>
-        <button type="button" onClick={() => move('right')} aria-label="Сдвинуть вправо"><ArrowRight /></button>
-      </div>
+      <p className="merge-swipe-hint">СВАЙПАЙ ПО ПОЛЮ</p>
+
+      {tutorialMode === 'intro' && (
+        <div className="merge-tutorial-backdrop">
+          <section
+            className="merge-tutorial-card"
+            role="dialog"
+            aria-label="Как играть в 2048"
+            data-testid="merge-tutorial-intro"
+          >
+            <span className="merge-tutorial-step">1 из 1</span>
+            <div className="merge-tutorial-example" aria-label="Два плюс два объединяются">
+              <span>2</span>
+              <span>2</span>
+              <ArrowRight />
+            </div>
+            <h2>Соединяй одинаковые числа</h2>
+            <p>Свайпни в любую сторону — плитки сдвинутся, а одинаковые объединятся.</p>
+            <button
+              type="button"
+              className="merge-tutorial-primary"
+              onClick={() => {
+                if (tutorialSource === 'help') setTutorialMode(undefined);
+                else setTutorialMode('practice');
+              }}
+              autoFocus
+            >
+              {tutorialSource === 'help' ? 'ПОНЯТНО' : 'ПОПРОБОВАТЬ'}
+            </button>
+            {tutorialSource === 'first-run' && (
+              <button type="button" className="merge-tutorial-skip" onClick={closeTutorial}>
+                Пропустить
+              </button>
+            )}
+          </section>
+        </div>
+      )}
+
+      {tutorialMode === 'success' && (
+        <div className="merge-tutorial-backdrop">
+          <section
+            className="merge-tutorial-card merge-tutorial-success"
+            role="dialog"
+            aria-label="Пробный ход выполнен"
+            data-testid="merge-tutorial-success"
+          >
+            <span className="merge-success-icon"><Check /></span>
+            <h2>Отлично! 2 + 2 = 4</h2>
+            <p>Продолжай объединять плитки и доберись до 2048.</p>
+            <button
+              type="button"
+              className="merge-tutorial-primary"
+              onClick={closeTutorial}
+              autoFocus
+            >
+              ИГРАТЬ
+            </button>
+          </section>
+        </div>
+      )}
 
     </section>,
     document.body,

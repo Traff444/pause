@@ -10,6 +10,7 @@ export type MergeGameState = {
   mode: 'playing' | 'paused' | 'resetting';
   resetRemainingMs: number;
   moves: number;
+  score: number;
   maxTile: number;
 };
 
@@ -45,15 +46,21 @@ function spawnTile(board: MergeBoard, seed: number) {
 function slideLine(line: number[]) {
   const compact = line.filter(Boolean);
   const merged: number[] = [];
+  let score = 0;
   for (let index = 0; index < compact.length; index += 1) {
     if (compact[index] === compact[index + 1]) {
-      merged.push(compact[index] * 2);
+      const mergedValue = compact[index] * 2;
+      merged.push(mergedValue);
+      score += mergedValue;
       index += 1;
     } else {
       merged.push(compact[index]);
     }
   }
-  return [...merged, ...Array.from({ length: MERGE_BOARD_SIZE - merged.length }, () => 0)];
+  return {
+    line: [...merged, ...Array.from({ length: MERGE_BOARD_SIZE - merged.length }, () => 0)],
+    score,
+  };
 }
 
 function coordinates(direction: MergeDirection, line: number, offset: number) {
@@ -83,7 +90,20 @@ export function createMergeGameState(seed = Date.now()): MergeGameState {
     mode: 'playing',
     resetRemainingMs: 0,
     moves: 0,
+    score: 0,
     maxTile: Math.max(...second.board.flat()),
+  };
+}
+
+export function createMergeTutorialState(seed = Date.now()): MergeGameState {
+  const state = createMergeGameState(seed);
+  const board = createEmptyMergeBoard();
+  board[0][0] = 2;
+  board[0][1] = 2;
+  return {
+    ...state,
+    board,
+    maxTile: 2,
   };
 }
 
@@ -93,6 +113,7 @@ export function moveMergeGame(
 ): MergeGameState {
   if (state.mode !== 'playing') return state;
   const board = state.board.map((row) => [...row]);
+  let scoreGain = 0;
 
   for (let line = 0; line < MERGE_BOARD_SIZE; line += 1) {
     const values = Array.from({ length: MERGE_BOARD_SIZE }, (_, offset) => {
@@ -100,7 +121,8 @@ export function moveMergeGame(
       return state.board[y][x];
     });
     const moved = slideLine(values);
-    moved.forEach((value, offset) => {
+    scoreGain += moved.score;
+    moved.line.forEach((value, offset) => {
       const { x, y } = coordinates(direction, line, offset);
       board[y][x] = value;
     });
@@ -119,6 +141,7 @@ export function moveMergeGame(
     board: spawned.board,
     seed: spawned.seed,
     moves: state.moves + 1,
+    score: state.score + scoreGain,
     maxTile: Math.max(state.maxTile, ...spawned.board.flat()),
   };
   return canMoveMergeBoard(next.board)
@@ -136,5 +159,11 @@ export function advanceMergeGame(state: MergeGameState, elapsedMs: number): Merg
   if (!safeElapsed || state.mode !== 'resetting') return state;
   const resetRemainingMs = state.resetRemainingMs - safeElapsed;
   if (resetRemainingMs > 0) return { ...state, resetRemainingMs };
-  return createMergeGameState(state.seed);
+  const restarted = createMergeGameState(state.seed);
+  return {
+    ...restarted,
+    moves: state.moves,
+    score: state.score,
+    maxTile: Math.max(state.maxTile, restarted.maxTile),
+  };
 }
