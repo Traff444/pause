@@ -11,6 +11,7 @@ import {
 describe('pause anchor demo stages', () => {
   it('changes support copy at the approved progress thresholds', () => {
     expect(pauseDemoMessage(0).eyebrow).toBe('ПАУЗА НАЧАЛАСЬ');
+    expect(pauseDemoMessage(0).copy).toBe('');
     expect(pauseDemoMessage(29.9).eyebrow).toBe('ПАУЗА НАЧАЛАСЬ');
     expect(pauseDemoMessage(30).eyebrow).toContain('30%');
     expect(pauseDemoMessage(50).eyebrow).toContain('ПОЛОВИНА');

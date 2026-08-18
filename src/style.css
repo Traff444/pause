@@ -863,13 +863,17 @@ input:focus-visible {
 }
 
 .screen-today:has(.anchor-live-screen) {
-  padding: var(--app-safe-top) 18px 8px;
+  display: flex;
+  padding: var(--app-safe-top) 18px 16px;
+  flex-direction: column;
   overflow-y: hidden;
 }
 
 .screen-today:has(.anchor-live-screen) > .tab-panel {
-  height: 100%;
+  height: auto;
   min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 h1,

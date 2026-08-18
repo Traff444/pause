@@ -64,6 +64,12 @@
   padding-top: 3px;
 }
 
+.anchor-live-screen .anchor-demo-support.compact {
+  min-height: 42px;
+  margin-bottom: 2px;
+  padding-top: 0;
+}
+
 .anchor-live-screen .anchor-demo-support > h1 {
   font-size: clamp(18px, 5vw, 21px);
 }
@@ -76,8 +82,8 @@
 
 .anchor-live-screen .anchor-demo-center,
 .anchor-live-screen .anchor-demo-control {
-  width: min(260px, 31dvh);
-  height: min(260px, 31dvh);
+  width: min(252px, 30dvh);
+  height: min(252px, 30dvh);
   min-height: 0;
   flex-basis: auto;
 }
@@ -428,7 +434,7 @@ button.anchor-demo-control {
 }
 
 .anchor-demo-early-action {
-  width: min(100%, 300px);
+  width: 100%;
   min-height: 48px;
   padding: 0 18px;
   border: 1px solid #a92f34;
