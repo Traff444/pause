@@ -17,9 +17,91 @@
 
 .anchor-live-screen {
   position: relative;
-  min-height: 100%;
-  padding-bottom: 18px;
+  display: grid;
+  height: 100%;
+  min-height: 0;
+  padding-bottom: 0;
+  grid-template-rows: 46px minmax(0, 1fr) 42px auto;
+  overflow: hidden;
   color: #182238;
+}
+
+.anchor-live-screen .anchor-demo-header {
+  min-height: 46px;
+}
+
+.anchor-live-screen .anchor-demo-hero {
+  display: grid;
+  min-height: 0;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  align-items: center;
+  justify-items: center;
+  justify-content: normal;
+}
+
+.anchor-live-screen .anchor-demo-today {
+  margin: 5px auto 0;
+  padding: 7px 10px 8px;
+  border-radius: 18px;
+}
+
+.anchor-live-screen .anchor-demo-today-grid > span {
+  min-height: 36px;
+}
+
+.anchor-live-screen .anchor-demo-today-grid strong {
+  font-size: 24px;
+}
+
+.anchor-live-screen .anchor-demo-today-grid small {
+  margin-top: 3px;
+  font-size: 9.5px;
+}
+
+.anchor-live-screen .anchor-demo-support {
+  min-height: 60px;
+  margin-bottom: 7px;
+  padding-top: 3px;
+}
+
+.anchor-live-screen .anchor-demo-support > h1 {
+  font-size: clamp(18px, 5vw, 21px);
+}
+
+.anchor-live-screen .anchor-demo-support > span {
+  min-height: 15px;
+  margin-top: 3px;
+  font-size: 10px;
+}
+
+.anchor-live-screen .anchor-demo-center,
+.anchor-live-screen .anchor-demo-control {
+  width: min(260px, 31dvh);
+  height: min(260px, 31dvh);
+  min-height: 0;
+  flex-basis: auto;
+}
+
+.anchor-live-screen .anchor-demo-smoke-slot {
+  height: 42px;
+  margin-top: 0;
+}
+
+.anchor-live-screen .anchor-demo-early-action {
+  min-height: 42px;
+}
+
+.anchor-live-screen .anchor-demo-activities {
+  margin-top: 10px;
+  gap: 6px;
+}
+
+.anchor-live-screen .anchor-demo-row,
+.anchor-live-screen .anchor-demo-games,
+.anchor-live-screen .anchor-demo-content {
+  min-height: 56px;
+  height: 56px;
+  border-radius: 18px;
 }
 
 .anchor-demo-screen {
