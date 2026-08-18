@@ -163,7 +163,7 @@ export function pauseDemoMessage(progress: number): DemoMessage {
   return {
     eyebrow: 'ПАУЗА НАЧАЛАСЬ',
     title: 'Просто побудь здесь',
-    copy: 'Выбери занятие ниже — время пойдёт само.',
+    copy: '',
   };
 }
 
@@ -359,10 +359,13 @@ export function PauseAnchorScreen({
           </div>
         </section>
 
-        <section className="anchor-demo-support" aria-live="polite">
+        <section
+          className={`anchor-demo-support${message.copy ? '' : ' compact'}`}
+          aria-live="polite"
+        >
           <p>{message.eyebrow}</p>
           <h1>{message.title}</h1>
-          <span>{message.copy}</span>
+          {message.copy && <span>{message.copy}</span>}
         </section>
 
         <div className="anchor-demo-center">
@@ -655,10 +658,13 @@ export function PauseAnchorDemo() {
             </div>
           </section>
 
-          <section className="anchor-demo-support" aria-live="polite">
+          <section
+            className={`anchor-demo-support${message.copy ? '' : ' compact'}`}
+            aria-live="polite"
+          >
             <p>{message.eyebrow}</p>
             <h1>{message.title}</h1>
-            <span>{message.copy}</span>
+            {message.copy && <span>{message.copy}</span>}
           </section>
 
           <div className="anchor-demo-center">
