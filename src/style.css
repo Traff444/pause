@@ -863,8 +863,13 @@ input:focus-visible {
 }
 
 .screen-today:has(.anchor-live-screen) {
-  padding: var(--app-safe-top) 18px 18px;
-  overflow-y: auto;
+  padding: var(--app-safe-top) 18px 8px;
+  overflow-y: hidden;
+}
+
+.screen-today:has(.anchor-live-screen) > .tab-panel {
+  height: 100%;
+  min-height: 0;
 }
 
 h1,
