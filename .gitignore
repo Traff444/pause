@@ -1,6 +1,8 @@
 node_modules/
 dist/
 coverage/
+output/playwright/
+.playwright-cli/
 font-work/
 .DS_Store
 .brooks-lint-history.json

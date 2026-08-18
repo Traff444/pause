@@ -57,6 +57,7 @@ import {
   reductionStartedAt,
   savedMoney,
   secondsUntilGoal,
+  todayPauseModel,
   todayKey,
   type AppState,
   type SettingsState,
@@ -81,9 +82,22 @@ import {
   passwordValidationMessage,
   type PasswordAuthMode,
 } from './auth';
-import { clearAppState, loadAppState, saveAppState } from './storage';
-import { FallingBlocksGame } from './FallingBlocksGame';
-import { Merge2048Game } from './Merge2048Game';
+import {
+  clearAppState,
+  clearPuzzleState,
+  loadAppState,
+  loadPuzzleState,
+  saveAppState,
+  savePuzzleState,
+} from './storage';
+import { PuzzleDialog, PuzzleEntryCard } from './PuzzleExperience';
+import { PauseAnchorDemo, PauseAnchorScreen } from './PauseAnchorDemo';
+import {
+  createInitialPuzzleState,
+  startOrResumePuzzle,
+  type LocalPuzzleState,
+  type PuzzleSession,
+} from './puzzles';
 import './style.css';
 
 const WEEK_LABELS = [
@@ -138,6 +152,7 @@ type OnboardingPreview = 'entry' | 'intro' | 'price' | 'final';
 
 function App() {
   const [state, setState] = useState<AppState>();
+  const [puzzleState, setPuzzleState] = useState<LocalPuzzleState>();
   const [session, setSession] = useState<Session | null | undefined>(
     cloudConfigured ? undefined : null,
   );
@@ -157,7 +172,7 @@ function App() {
     () => (import.meta.env.DEV ? new URLSearchParams(window.location.search).get('demo') : null),
     [],
   );
-  const gameDemoEnabled = demoScene === 'game';
+  const gameDemoEnabled = demoScene === 'game' || demoScene === 'puzzle';
   const gameDemoComplete =
     gameDemoEnabled && new URLSearchParams(window.location.search).get('gameRemaining') === '0';
   const [gameDemoState, setGameDemoState] = useState<AppState | undefined>(() =>
@@ -202,16 +217,18 @@ function App() {
     if (session === undefined || loadedOwnerId === ownerId) return;
     let active = true;
     setState(undefined);
+    setPuzzleState(undefined);
     setCloudUserId(undefined);
-    loadAppState(ownerId).then((nextState) => {
+    Promise.all([loadAppState(ownerId), loadPuzzleState(ownerId)]).then(([nextState, nextPuzzleState]) => {
       if (!active) return;
       setState(nextState);
+      setPuzzleState(gameDemoEnabled ? createInitialPuzzleState() : nextPuzzleState);
       setLoadedOwnerId(ownerId);
     });
     return () => {
       active = false;
     };
-  }, [loadedOwnerId, ownerId, session]);
+  }, [gameDemoEnabled, loadedOwnerId, ownerId, session]);
 
   useEffect(() => {
     const retry = () => setSyncRevision((current) => current + 1);
@@ -240,6 +257,13 @@ function App() {
       setSnackbar({ kind: 'message', message: 'Не удалось сохранить изменение' }),
     );
   }, [state, demoState, loadedOwnerId, ownerId]);
+
+  useEffect(() => {
+    if (!puzzleState || demoState || loadedOwnerId !== ownerId) return;
+    savePuzzleState(puzzleState, ownerId).catch(() =>
+      setSnackbar({ kind: 'message', message: 'Не удалось сохранить головоломку' }),
+    );
+  }, [puzzleState, demoState, loadedOwnerId, ownerId]);
 
   useEffect(() => {
     const userId = session?.user.id;
@@ -399,19 +423,20 @@ function App() {
     );
   }
 
-  if (!state) return <LoadingScreen />;
+  if (!state || !puzzleState) return <LoadingScreen />;
 
   if (!state.onboarded && !demoState) {
     return (
       <Onboarding
         initialStep={cloudConfigured ? 2 : 1}
-        onDone={(settings) =>
+        onDone={(settings) => {
           setState({
             ...createInitialState(),
             onboarded: true,
             settings,
-          })
-        }
+          });
+          setPuzzleState(createInitialPuzzleState());
+        }}
       />
     );
   }
@@ -432,6 +457,13 @@ function App() {
   const recordSmoke = () => {
     if (staticDemoState) return;
     const timestamp = Date.now();
+    const activeBeforeSmoke = eventsToday(shownState.events, timestamp)
+      .filter((event) => event.occurredAt <= timestamp);
+    const previousEvent = activeBeforeSmoke.at(-1);
+    const currentGoal = shownState.dailyGoals[todayKey(timestamp)] ?? shownState.goal;
+    const elapsedMinutes = previousEvent
+      ? Math.max(0, Math.floor((timestamp - previousEvent.occurredAt) / minute))
+      : undefined;
     setNow(timestamp);
     const event: SmokingEvent = {
       id: crypto.randomUUID(),
@@ -443,7 +475,14 @@ function App() {
       events: [...current.events, event],
       skipStartedAt: undefined,
     }));
-    setSnackbar({ kind: 'undo', eventId: event.id, message: 'Отмечено!' });
+    const message = currentGoal && elapsedMinutes !== undefined
+      ? elapsedMinutes >= currentGoal
+        ? `Пауза ${currentGoal} минут — цель достигнута. Новая пауза началась`
+        : `Сигарета отмечена · пауза ${elapsedMinutes} из ${currentGoal} минут. Новая пауза началась`
+      : currentGoal
+        ? 'Сигарета отмечена · новая пауза началась'
+        : 'Сигарета отмечена';
+    setSnackbar({ kind: 'undo', eventId: event.id, message });
     window.setTimeout(
       () =>
         setSnackbar((current) =>
@@ -487,11 +526,15 @@ function App() {
           {shownState.activeTab === 'today' && (
             <TodayScreen
               state={shownState}
+              puzzleState={puzzleState}
               now={now}
               onOpenSettings={() => setSettingsOpen(true)}
               onSmoke={recordSmoke}
               onDismissGamePrompt={(anchor) => update({ dismissedGamePromptAnchor: anchor })}
               onRecordLapse={recordLapse}
+              onPuzzleStateChange={(recipe) =>
+                setPuzzleState((current) => (current ? recipe(current) : current))
+              }
             />
           )}
           {shownState.activeTab === 'plan' && <PlanScreen state={shownState} now={now} />}
@@ -549,8 +592,9 @@ function App() {
             setSettingsOpen(false);
           }}
           onReset={async () => {
-            await clearAppState(ownerId);
+            await Promise.all([clearAppState(ownerId), clearPuzzleState(ownerId)]);
             setState(createInitialState());
+            setPuzzleState(createInitialPuzzleState());
             setSettingsOpen(false);
           }}
         />
@@ -1113,37 +1157,47 @@ function StageHeader({
 
 function TodayScreen({
   state,
+  puzzleState,
   now,
   onOpenSettings,
   onSmoke,
   onDismissGamePrompt,
   onRecordLapse,
+  onPuzzleStateChange,
 }: {
   state: AppState;
+  puzzleState: LocalPuzzleState;
   now: number;
   onOpenSettings: () => void;
   onSmoke: () => void;
   onDismissGamePrompt: (anchor: number) => void;
   onRecordLapse: () => void;
+  onPuzzleStateChange: (recipe: (current: LocalPuzzleState) => LocalPuzzleState) => void;
 }) {
   const [supportOpen, setSupportOpen] = useState(false);
   const [supportSeconds, setSupportSeconds] = useState(180);
   const [supportRunning, setSupportRunning] = useState(false);
-  const [activeGame, setActiveGame] = useState<'blocks' | 'merge' | undefined>(() => {
-    if (!import.meta.env.DEV) return undefined;
-    const preview = new URLSearchParams(window.location.search).get('activeGame');
-    return preview === 'blocks' || preview === 'merge' ? preview : undefined;
-  });
+  const [puzzleOpen, setPuzzleOpen] = useState(false);
+  const [hiddenCompletedPuzzleAnchor, setHiddenCompletedPuzzleAnchor] = useState<number>();
   const todayEvents = eventsToday(state.events, now);
   const sinceLast = minutesSinceLastSmoking(state.events, now);
   const goal = state.dailyGoals[todayKey(now)] ?? state.goal;
+  const livePause = goal ? todayPauseModel(state.events, goal, now) : undefined;
   const remaining = secondsUntilGoal(state.events, goal, now);
   const latestEventAnchor = activeEvents(state.events)
     .filter((event) => event.occurredAt <= now)
     .at(-1)?.occurredAt;
   const countdownAnchor = latestEventAnchor;
-  const gamePromptDismissed =
+  const pauseEndAt = countdownAnchor && goal ? countdownAnchor + goal * minute : undefined;
+  const pausePromptDismissed =
     countdownAnchor !== undefined && state.dismissedGamePromptAnchor === countdownAnchor;
+  const puzzleCompletedThisPause = Boolean(
+    countdownAnchor !== undefined &&
+    puzzleState.current?.pauseAnchor === countdownAnchor &&
+    puzzleState.current.status !== 'active',
+  );
+  const showCompletedPuzzleButton =
+    puzzleCompletedThisPause && hiddenCompletedPuzzleAnchor !== countdownAnchor;
   const intervalProgress = goal
     ? Math.min(100, Math.max(0, ((goal * 60 - remaining) / (goal * 60)) * 100))
     : 0;
@@ -1154,14 +1208,40 @@ function TodayScreen({
     return () => window.clearInterval(timer);
   }, [supportRunning, supportSeconds]);
 
-  if (activeGame && state.phase !== 'observation' && state.phase !== 'quit' && goal && countdownAnchor) {
-    const gameProps = {
-      remainingSeconds: remaining,
-      onClose: () => setActiveGame(undefined),
-    };
-    return activeGame === 'blocks'
-      ? <FallingBlocksGame {...gameProps} />
-      : <Merge2048Game {...gameProps} />;
+  const openPuzzle = () => {
+    if (!countdownAnchor || !pauseEndAt) return;
+    const openedAt = Date.now();
+    onPuzzleStateChange((current) =>
+      startOrResumePuzzle(current, countdownAnchor, pauseEndAt, openedAt),
+    );
+    setPuzzleOpen(true);
+  };
+
+  const updatePuzzleSession = (nextSession: PuzzleSession) => {
+    onPuzzleStateChange((current) =>
+      current.current?.puzzleId === nextSession.puzzleId
+        ? { ...current, current: nextSession }
+        : current,
+    );
+  };
+
+  if (
+    puzzleOpen &&
+    puzzleState.current &&
+    state.phase !== 'observation' &&
+    state.phase !== 'quit' &&
+    goal &&
+    countdownAnchor
+  ) {
+    return (
+      <PuzzleDialog
+        session={puzzleState.current}
+        now={now}
+        remainingSeconds={remaining}
+        onChange={updatePuzzleSession}
+        onClose={() => setPuzzleOpen(false)}
+      />
+    );
   }
 
   const metrics = (
@@ -1236,9 +1316,36 @@ function TodayScreen({
     );
   }
 
-  if (state.phase !== 'observation' && goal && sinceLast !== undefined && remaining > 0) {
+  if (
+    (state.phase === 'reduction' || state.phase === 'preparation') &&
+    goal &&
+    livePause
+  ) {
     return (
-      <section className={`pause-waiting ${gamePromptDismissed ? 'compact' : ''}`}>
+      <PauseAnchorScreen
+        cigarettes={livePause.cigarettes}
+        reachedPauses={livePause.reachedPauses}
+        goalSeconds={goal * 60}
+        remainingSeconds={livePause.remainingSeconds}
+        now={now}
+        pauseAnchor={livePause.anchor}
+        puzzleState={puzzleState}
+        onPuzzleStateChange={onPuzzleStateChange}
+        onOpenSettings={onOpenSettings}
+        onSmoke={onSmoke}
+      />
+    );
+  }
+
+  if (
+    state.phase !== 'observation' &&
+    goal &&
+    sinceLast !== undefined &&
+    remaining > 0 &&
+    countdownAnchor
+  ) {
+    return (
+      <section className={`pause-waiting ${pausePromptDismissed ? 'compact' : ''}`}>
         <button
           className="icon-button pause-settings-button"
           onClick={onOpenSettings}
@@ -1252,19 +1359,27 @@ function TodayScreen({
         <p className="pause-waiting-goal">Сегодняшняя цель — {goal} минут</p>
         <Progress value={intervalProgress} />
 
-        {!gamePromptDismissed ? (
-          <section className="game-invite-card" data-testid="game-invite">
-            <div className="pause-blocks-mark" aria-hidden="true">
-              <span /><span /><span /><span /><span />
-            </div>
-            <div>
-              <p className="section-label">ПАУЗА: ИГРЫ</p>
-              <h2>Переключимся на пару минут?</h2>
-              <p>Выбери спокойную игру, пока желание проходит.</p>
-            </div>
-            <GameChoiceButtons
-              onBlocks={() => setActiveGame('blocks')}
-              onMerge={() => setActiveGame('merge')}
+        {showCompletedPuzzleButton ? (
+          <div className="puzzle-complete-action">
+            <p><Check aria-hidden="true" /> ГОЛОВОЛОМКА ПРОЙДЕНА</p>
+            <button
+              type="button"
+              className="puzzle-complete-timer-button"
+              aria-label={`Продолжить паузу, осталось ${formatTimer(remaining)}`}
+              onClick={() => {
+                setHiddenCompletedPuzzleAnchor(countdownAnchor);
+                onDismissGamePrompt(countdownAnchor);
+              }}
+            >
+              <strong>ПРОДОЛЖИТЬ ПАУЗУ · <span>{formatTimer(remaining)}</span></strong>
+              <ArrowRight aria-hidden="true" />
+            </button>
+          </div>
+        ) : !pausePromptDismissed && !puzzleCompletedThisPause ? (
+          <section className="pause-support-card" data-testid="pause-invite">
+            <PuzzleEntryCard
+              puzzleState={puzzleState}
+              onOpen={openPuzzle}
             />
             <button
               type="button"
@@ -1274,16 +1389,15 @@ function TodayScreen({
               ОСТАТЬСЯ НА ТАЙМЕРЕ
             </button>
           </section>
-        ) : (
-          <div className="compact-game-choices">
-            <span>ВЫБЕРИ ИГРУ</span>
-            <GameChoiceButtons
+        ) : !puzzleCompletedThisPause ? (
+          <div className="compact-pause-choices">
+            <PuzzleEntryCard
+              puzzleState={puzzleState}
               compact
-              onBlocks={() => setActiveGame('blocks')}
-              onMerge={() => setActiveGame('merge')}
+              onOpen={openPuzzle}
             />
           </div>
-        )}
+        ) : null}
 
         <button type="button" className="text-button pause-smoke-action" onClick={onSmoke}>
           ОТМЕТИТЬ СИГАРЕТУ
@@ -1323,48 +1437,21 @@ function TodayScreen({
           <h2>Пауза уже пройдена</h2>
           <p>Между сигаретами уже {formatMinutes(sinceLast)}. Минимум — {formatMinutes(goal)}.</p>
           <button className="smoke-button choice-smoke-button" onClick={onSmoke}>ИДУ КУРИТЬ</button>
-          <p className="replay-game-label">ИГРАТЬ ЕЩЁ</p>
-          <GameChoiceButtons
-            compact
-            onBlocks={() => setActiveGame('blocks')}
-            onMerge={() => setActiveGame('merge')}
-          />
+          {countdownAnchor &&
+            puzzleState.current &&
+            puzzleState.current.status === 'active' && (
+              <>
+                <p className="replay-game-label">ГОЛОВОЛОМКА ПАУЗЫ</p>
+                <PuzzleEntryCard
+                  puzzleState={puzzleState}
+                  compact
+                  onOpen={openPuzzle}
+                />
+              </>
+            )}
         </section>
       )}
     </>
-  );
-}
-
-function GameChoiceButtons({
-  onBlocks,
-  onMerge,
-  compact = false,
-}: {
-  onBlocks: () => void;
-  onMerge: () => void;
-  compact?: boolean;
-}) {
-  return (
-    <div className={`game-choice-grid ${compact ? 'compact' : ''}`}>
-      <button type="button" onClick={onBlocks} aria-label="Играть в Блоки">
-        <span className="game-choice-icon blocks-choice-icon" aria-hidden="true">
-          <i /><i /><i />
-        </span>
-        <span>
-          <strong>БЛОКИ</strong>
-          {!compact && <small>Фигуры падают</small>}
-        </span>
-      </button>
-      <button type="button" onClick={onMerge} aria-label="Играть в 2048">
-        <span className="game-choice-icon merge-choice-icon" aria-hidden="true">
-          <i>2</i><i>4</i><i>8</i><i>16</i>
-        </span>
-        <span>
-          <strong>2048</strong>
-          {!compact && <small>Соединяй пары</small>}
-        </span>
-      </button>
-    </div>
   );
 }
 
@@ -2091,10 +2178,12 @@ function pluralCigarettes(value: number) {
 const rootContainer = document.getElementById('root')!;
 const rootGlobal = globalThis as typeof globalThis & { __pauzaReactRoot?: Root };
 const root = rootGlobal.__pauzaReactRoot ?? createRoot(rootContainer);
+const anchorDemoEnabled = import.meta.env.DEV &&
+  new URLSearchParams(window.location.search).get('demo') === 'anchor';
 if (import.meta.env.DEV) rootGlobal.__pauzaReactRoot = root;
 
 root.render(
   <React.StrictMode>
-    <App />
+    {anchorDemoEnabled ? <PauseAnchorDemo /> : <App />}
   </React.StrictMode>,
 );
