@@ -1,22 +1,31 @@
 import Dexie, { type Table } from 'dexie';
 import { createInitialState, type AppState } from './domain';
+import { createInitialPuzzleState, type LocalPuzzleState } from './puzzles';
 
 type AppRecord = {
   id: string;
   state: AppState;
 };
 
+type PuzzleRecord = {
+  id: string;
+  state: LocalPuzzleState;
+};
+
 class PauzaDatabase extends Dexie {
   app!: Table<AppRecord, string>;
+  puzzles!: Table<PuzzleRecord, string>;
 
   constructor() {
     super('pauza-pwa');
     this.version(1).stores({ app: 'id' });
+    this.version(2).stores({ app: 'id', puzzles: 'id' });
   }
 }
 
 export const db = new PauzaDatabase();
 let saveQueue: Promise<void> = Promise.resolve();
+let puzzleSaveQueue: Promise<void> = Promise.resolve();
 
 const recordId = (ownerId: string) => `state:${ownerId}`;
 
@@ -98,4 +107,39 @@ export async function clearAppState(ownerId = 'local') {
   await saveQueue.catch(() => undefined);
   await db.app.delete(recordId(ownerId));
   localStorage.removeItem('pauza');
+}
+
+export async function loadPuzzleState(ownerId = 'local') {
+  try {
+    const record = await db.puzzles.get(recordId(ownerId));
+    if (record?.state?.version === 1 && Array.isArray(record.state.seenPuzzleIds)) {
+      return record.state;
+    }
+
+    if (ownerId !== 'local') {
+      const localRecord = await db.puzzles.get(recordId('local'));
+      if (localRecord?.state?.version === 1 && Array.isArray(localRecord.state.seenPuzzleIds)) {
+        await savePuzzleState(localRecord.state, ownerId);
+        await db.puzzles.delete(recordId('local'));
+        return localRecord.state;
+      }
+    }
+  } catch {
+    // Puzzle progress is optional and must never prevent the core timer from opening.
+  }
+  return createInitialPuzzleState();
+}
+
+export async function savePuzzleState(state: LocalPuzzleState, ownerId = 'local') {
+  puzzleSaveQueue = puzzleSaveQueue
+    .catch(() => undefined)
+    .then(async () => {
+      await db.puzzles.put({ id: recordId(ownerId), state });
+    });
+  return puzzleSaveQueue;
+}
+
+export async function clearPuzzleState(ownerId = 'local') {
+  await puzzleSaveQueue.catch(() => undefined);
+  await db.puzzles.delete(recordId(ownerId));
 }

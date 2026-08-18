@@ -166,6 +166,39 @@ export function secondsUntilGoal(
   return Math.max(0, Math.ceil((anchor + goalMinutes * minute - now) / 1000));
 }
 
+export function todayPauseModel(
+  events: SmokingEvent[],
+  goalMinutes: number,
+  now = Date.now(),
+) {
+  const todayEvents = eventsToday(events, now).filter((event) => event.occurredAt <= now);
+  const anchor = todayEvents.at(-1)?.occurredAt;
+  const goalSeconds = Math.max(1, goalMinutes * 60);
+  const remainingSeconds = anchor === undefined
+    ? goalSeconds
+    : Math.max(0, Math.ceil((anchor + goalMinutes * minute - now) / 1000));
+  const reachedPauses = todayEvents
+    .slice(1)
+    .filter((event, index) => event.occurredAt - todayEvents[index].occurredAt >= goalMinutes * minute)
+    .length;
+  const progress = anchor === undefined
+    ? 0
+    : Math.min(100, Math.max(0, ((goalSeconds - remainingSeconds) / goalSeconds) * 100));
+
+  return {
+    cigarettes: todayEvents.length,
+    reachedPauses,
+    anchor,
+    remainingSeconds,
+    progress,
+    status: anchor === undefined
+      ? ('ready' as const)
+      : remainingSeconds > 0
+        ? ('running' as const)
+        : ('completed' as const),
+  };
+}
+
 export function dayResult(events: SmokingEvent[], localDate: string, targetMinutes: number) {
   const items = activeEvents(events).filter((event) => todayKey(event.occurredAt) === localDate);
   if (items.length === 0) return 'success' as const;

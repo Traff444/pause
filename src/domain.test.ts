@@ -17,6 +17,7 @@ import {
   reductionStartedAt,
   savedMoney,
   secondsUntilGoal,
+  todayPauseModel,
   todayKey,
   type SmokingEvent,
 } from './domain';
@@ -104,6 +105,42 @@ describe('daily result', () => {
 });
 
 describe('timer and reduction', () => {
+  it('builds the live pause model from current-day events only', () => {
+    const now = new Date(2026, 6, 10, 12).getTime();
+    const previousNight = event('night', new Date(2026, 6, 9, 23, 40).getTime());
+    const first = event('first', now - 70 * minute);
+    const second = event('second', now - 30 * minute);
+    const deleted = { ...event('deleted', now - 5 * minute), deletedAt: now - minute };
+    const future = event('future', now + minute);
+
+    expect(todayPauseModel([previousNight, first, second, deleted, future], 35, now)).toEqual({
+      cigarettes: 2,
+      reachedPauses: 1,
+      anchor: second.occurredAt,
+      remainingSeconds: 5 * 60,
+      progress: expect.closeTo((30 / 35) * 100),
+      status: 'running',
+    });
+  });
+
+  it('keeps the first cigarette pause-neutral and exposes ready and completed states', () => {
+    const now = new Date(2026, 6, 10, 12).getTime();
+    expect(todayPauseModel([], 20, now)).toMatchObject({
+      cigarettes: 0,
+      reachedPauses: 0,
+      anchor: undefined,
+      status: 'ready',
+    });
+
+    expect(todayPauseModel([event('first', now - 25 * minute)], 20, now)).toMatchObject({
+      cigarettes: 1,
+      reachedPauses: 0,
+      remainingSeconds: 0,
+      progress: 100,
+      status: 'completed',
+    });
+  });
+
   it('counts down from the latest event in seconds', () => {
     const now = new Date(2026, 6, 10, 12).getTime();
     const latest = event('latest', now - 10 * minute);
