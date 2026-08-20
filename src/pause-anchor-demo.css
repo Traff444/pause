@@ -58,10 +58,6 @@
   font-size: 9.5px;
 }
 
-.anchor-live-screen .anchor-demo-pause-ratio > .anchor-demo-pause-ratio-word {
-  font-size: 9.5px;
-}
-
 .anchor-live-screen .anchor-demo-support {
   min-height: 60px;
   margin-bottom: 7px;
@@ -207,30 +203,6 @@
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.04em;
   line-height: 0.95;
-}
-
-.anchor-demo-today-grid .anchor-demo-pause-ratio {
-  display: inline-flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 4px;
-}
-
-.anchor-demo-pause-ratio > span {
-  color: inherit;
-  font: inherit;
-}
-
-.anchor-demo-pause-ratio > .anchor-demo-pause-ratio-reference {
-  color: #1246b8;
-}
-
-.anchor-demo-pause-ratio > .anchor-demo-pause-ratio-word {
-  color: #4f5867;
-  font-size: 10.5px;
-  font-weight: 800;
-  letter-spacing: 0.025em;
-  line-height: 1.12;
 }
 
 .anchor-demo-today-grid small {

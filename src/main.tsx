@@ -1343,7 +1343,6 @@ function TodayScreen({
     return (
       <PauseAnchorScreen
         cigarettes={livePause.cigarettes}
-        measuredPauses={livePause.measuredPauses}
         reachedPauses={livePause.reachedPauses}
         goalSeconds={goal * 60}
         remainingSeconds={livePause.remainingSeconds}
