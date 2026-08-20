@@ -13,10 +13,15 @@ import {
   minute,
   minutesSinceLastSmoking,
   notSmoked,
+  notSmokedExact,
+  pauseStatistics,
   programDay,
+  reductionPercent,
   reductionStartedAt,
   savedMoney,
   secondsUntilGoal,
+  statisticsEvents,
+  statisticsSeries,
   todayPauseModel,
   todayKey,
   type SmokingEvent,
@@ -79,6 +84,19 @@ describe('baseline', () => {
     });
   });
 
+  it('does not treat the partial onboarding day as a complete observation day', () => {
+    const startedAt = new Date(2026, 6, 1, 21).getTime();
+    const events = [event('partial', new Date(2026, 6, 1, 22).getTime())];
+
+    for (let date = 2; date <= 7; date += 1) {
+      for (let index = 0; index < 10; index += 1) {
+        events.push(event(`${date}-${index}`, new Date(2026, 6, date, 8 + index).getTime()));
+      }
+    }
+
+    expect(calculateBaseline(events, 25, startedAt).daily).toBe(10);
+  });
+
   it('uses a calm fallback with insufficient intervals', () => {
     expect(calculateBaseline([])).toEqual({ daily: 0, interval: 25, step: 2 });
   });
@@ -104,7 +122,128 @@ describe('daily result', () => {
   });
 });
 
+describe('statistics periods', () => {
+  it('keeps the monthly daily average accurate in the final partial block', () => {
+    const now = new Date(2026, 6, 31, 0, 0).getTime();
+    const startedAt = new Date(2026, 6, 1, 0, 0).getTime();
+    const events: SmokingEvent[] = [];
+    for (let date = 2; date <= 30; date += 1) {
+      for (let index = 0; index < 10; index += 1) {
+        events.push(event(`${date}-${index}`, new Date(2026, 6, date, 1 + index).getTime()));
+      }
+    }
+    const state = { ...createInitialState(startedAt), events };
+
+    expect(statisticsSeries(state, 'Месяц', now).map(({ count }) => count)).toEqual(
+      Array.from({ length: 10 }, () => 10),
+    );
+  });
+
+  it('keeps calendar-day averages stable across daylight-saving changes', () => {
+    const environment = (globalThis as unknown as {
+      process: { env: Record<string, string | undefined> };
+    }).process.env;
+    const previousTimezone = environment.TZ;
+    environment.TZ = 'America/New_York';
+    try {
+      const now = new Date(2026, 2, 11, 0, 0).getTime();
+      const startedAt = new Date(2026, 1, 1, 0, 0).getTime();
+      const events: SmokingEvent[] = [];
+      const cursor = new Date(2026, 1, 10, 0, 0);
+      while (cursor.getTime() < now) {
+        for (let index = 0; index < 10; index += 1) {
+          events.push(
+            event(
+              `${cursor.getMonth()}-${cursor.getDate()}-${index}`,
+              new Date(
+                cursor.getFullYear(),
+                cursor.getMonth(),
+                cursor.getDate(),
+                8 + index,
+              ).getTime(),
+            ),
+          );
+        }
+        cursor.setDate(cursor.getDate() + 1);
+      }
+      const state = { ...createInitialState(startedAt), events };
+
+      expect(statisticsSeries(state, 'Месяц', now).map(({ count }) => count)).toEqual(
+        Array.from({ length: 10 }, () => 10),
+      );
+    } finally {
+      environment.TZ = previousTimezone;
+    }
+  });
+
+  it('divides the current all-time week by elapsed time and ignores future events', () => {
+    const startedAt = new Date(2026, 6, 1, 0, 0).getTime();
+    const now = new Date(2026, 6, 10, 0, 0).getTime();
+    const events: SmokingEvent[] = [];
+    for (let date = 1; date <= 9; date += 1) {
+      for (let index = 0; index < 10; index += 1) {
+        events.push(event(`${date}-${index}`, new Date(2026, 6, date, 1 + index).getTime()));
+      }
+    }
+    events.push(event('future', new Date(2026, 6, 10, 1).getTime()));
+    events.push({
+      ...event('deleted', new Date(2026, 6, 9, 23).getTime()),
+      deletedAt: now - minute,
+    });
+    const state = { ...createInitialState(startedAt), events };
+
+    expect(statisticsSeries(state, 'Всё время', now).map(({ count }) => count)).toEqual([10, 10]);
+  });
+
+  it('uses local midnight for period boundaries and excludes deleted and future marks', () => {
+    const now = new Date(2026, 6, 10, 0, 5).getTime();
+    const state = {
+      ...createInitialState(new Date(2026, 6, 1).getTime()),
+      events: [
+        event('included', new Date(2026, 6, 4, 0, 1).getTime()),
+        event('too-old', new Date(2026, 6, 3, 23, 59).getTime()),
+        event('future', now + minute),
+        { ...event('deleted', new Date(2026, 6, 8, 12).getTime()), deletedAt: now - minute },
+      ],
+    };
+
+    expect(statisticsEvents(state, 'Неделя', now).map(({ id }) => id)).toEqual(['included']);
+  });
+
+  it('does not substitute historical pauses when the selected period has no interval', () => {
+    const selectedPeriodEvents = [event('only', new Date(2026, 6, 10, 12).getTime())];
+
+    expect(pauseStatistics(selectedPeriodEvents)).toEqual({
+      intervals: [],
+      totalMinutes: 0,
+      averageMinutes: undefined,
+      longestMinutes: undefined,
+    });
+  });
+});
+
 describe('timer and reduction', () => {
+  it('corrects a previously stored baseline built from a partial onboarding day', () => {
+    const startedAt = new Date(2026, 6, 1, 21).getTime();
+    const observationEvents = [event('partial', new Date(2026, 6, 1, 22).getTime())];
+    for (let date = 2; date <= 7; date += 1) {
+      for (let index = 0; index < 10; index += 1) {
+        observationEvents.push(
+          event(`${date}-${index}`, new Date(2026, 6, date, 8 + index).getTime()),
+        );
+      }
+    }
+    const state = {
+      ...createInitialState(startedAt),
+      onboarded: true,
+      baseline: { daily: 8.7, interval: 25, step: 2 },
+      events: observationEvents,
+    };
+    const now = reductionStartedAt(startedAt) + 10 * day;
+
+    expect(expectedCigarettesSinceReduction(state, now)).toBe(100);
+  });
+
   it('builds the live pause model from current-day events only', () => {
     const now = new Date(2026, 6, 10, 12).getTime();
     const previousNight = event('night', new Date(2026, 6, 9, 23, 40).getTime());
@@ -115,6 +254,7 @@ describe('timer and reduction', () => {
 
     expect(todayPauseModel([previousNight, first, second, deleted, future], 35, now)).toEqual({
       cigarettes: 2,
+      measuredPauses: 1,
       reachedPauses: 1,
       anchor: second.occurredAt,
       remainingSeconds: 5 * 60,
@@ -127,6 +267,7 @@ describe('timer and reduction', () => {
     const now = new Date(2026, 6, 10, 12).getTime();
     expect(todayPauseModel([], 20, now)).toMatchObject({
       cigarettes: 0,
+      measuredPauses: 0,
       reachedPauses: 0,
       anchor: undefined,
       status: 'ready',
@@ -134,6 +275,7 @@ describe('timer and reduction', () => {
 
     expect(todayPauseModel([event('first', now - 25 * minute)], 20, now)).toMatchObject({
       cigarettes: 1,
+      measuredPauses: 0,
       reachedPauses: 0,
       remainingSeconds: 0,
       progress: 100,
@@ -198,6 +340,22 @@ describe('timer and reduction', () => {
 
     expect(expectedCigarettesSinceReduction(state, now)).toBe(5);
     expect(notSmoked(state, now)).toBe(4);
+  });
+
+  it('uses the precise avoided amount for money and caps the reduction percentage', () => {
+    const startedAt = new Date(2026, 6, 1, 12).getTime();
+    const now = reductionStartedAt(startedAt) + 2 * 60 * minute;
+    const state = {
+      ...createInitialState(startedAt),
+      onboarded: true,
+      baseline: { daily: 8, interval: 25, step: 2 },
+      settings: { packPrice: 500, cigarettesPerPack: 20 },
+    };
+
+    expect(notSmokedExact(state, now)).toBeCloseTo(2 / 3);
+    expect(notSmoked(state, now)).toBe(1);
+    expect(reductionPercent(state, now)).toBe(100);
+    expect(savedMoney(state, now)).toBe(17);
   });
 
   it('reports the actual distance from the latest valid mark', () => {

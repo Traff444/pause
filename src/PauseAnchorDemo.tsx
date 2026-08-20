@@ -21,6 +21,7 @@ import { PauseStoryViewer } from './PauseStories';
 import { PuzzleDialog } from './PuzzleExperience';
 import { formatTimer } from './domain';
 import { pauseStoryById, type PauseStoryId } from './pause-stories';
+import { pauseTipForProgress } from './pause-tips';
 import {
   TACTILE_PUZZLES,
   createPuzzleSession,
@@ -105,6 +106,17 @@ export function pauseDurationSummary(value: number) {
   return `${value} ${pauseDurationLabel(value)}`;
 }
 
+function PauseRatio({ reached, measured }: { reached: number; measured: number }) {
+  if (measured <= 0) return <strong>—</strong>;
+  return (
+    <strong className="anchor-demo-pause-ratio" aria-label={`${reached} из ${measured}`}>
+      <span>{reached}</span>
+      <span className="anchor-demo-pause-ratio-word">из</span>
+      <span className="anchor-demo-pause-ratio-reference">{measured}</span>
+    </strong>
+  );
+}
+
 export function recordDemoSmoke(
   stats: DemoDayStats,
   remainingSeconds: number,
@@ -136,7 +148,7 @@ export function pauseDemoMessage(progress: number): DemoMessage {
     return {
       eyebrow: 'ПАУЗА ЗАВЕРШЕНА',
       title: 'Решение по-прежнему за тобой',
-      copy: 'Кнопка снова доступна.',
+      copy: '',
     };
   }
   if (progress >= 80) {
@@ -213,6 +225,7 @@ function ContentIcon({ kind }: { kind: DemoContent['kind'] }) {
 
 type PauseAnchorScreenProps = {
   cigarettes: number;
+  measuredPauses: number;
   reachedPauses: number;
   goalSeconds?: number;
   remainingSeconds: number;
@@ -222,6 +235,10 @@ type PauseAnchorScreenProps = {
   onPuzzleStateChange: (recipe: (current: LocalPuzzleState) => LocalPuzzleState) => void;
   onOpenSettings: () => void;
   onSmoke: () => void;
+  notice?: {
+    message: string;
+    onUndo?: () => void;
+  };
 };
 
 function storyForProgress(progress: number): PauseStoryId {
@@ -232,6 +249,7 @@ function storyForProgress(progress: number): PauseStoryId {
 
 export function PauseAnchorScreen({
   cigarettes,
+  measuredPauses,
   reachedPauses,
   goalSeconds,
   remainingSeconds,
@@ -241,6 +259,7 @@ export function PauseAnchorScreen({
   onPuzzleStateChange,
   onOpenSettings,
   onSmoke,
+  notice,
 }: PauseAnchorScreenProps) {
   const [activeGame, setActiveGame] = useState<ActiveGame>();
   const [gameChooserOpen, setGameChooserOpen] = useState(false);
@@ -251,13 +270,21 @@ export function PauseAnchorScreen({
   const progress = pauseActive
     ? Math.min(100, Math.max(0, ((safeGoalSeconds - remainingSeconds) / safeGoalSeconds) * 100))
     : 0;
-  const message = pauseActive
+  const baseMessage = pauseActive
     ? pauseDemoMessage(progress)
     : {
         eyebrow: 'ТВОЯ ПАУЗА',
         title: 'Один жест перед сигаретой',
         copy: 'Круг останется на месте и проведёт через всё ожидание.',
       };
+  const pauseHasTip = pauseActive && remainingSeconds > 0;
+  const message = pauseHasTip
+    ? {
+        ...baseMessage,
+        title: pauseTipForProgress(progress, pauseAnchor ?? 0).text,
+        copy: '',
+      }
+    : baseMessage;
   const content = pauseDemoContent(progress);
   const featuredStory = pauseStoryById(storyForProgress(progress));
   const currentPuzzleSession =
@@ -266,6 +293,7 @@ export function PauseAnchorScreen({
     currentPuzzleSession?.status !== undefined &&
     currentPuzzleSession.status !== 'active';
   const anchorAvailable = !pauseActive || remainingSeconds <= 0;
+  const pauseCompleted = pauseActive && anchorAvailable;
   const progressStyle = {
     '--anchor-progress': `${Math.max(0, Math.min(360, progress * 3.6))}deg`,
   } as CSSProperties;
@@ -344,7 +372,9 @@ export function PauseAnchorScreen({
         ><Settings /></button>
       </header>
 
-      <section className="anchor-demo-hero">
+      <section
+        className={`anchor-demo-hero${pauseCompleted ? ' is-completed' : ''}${pauseHasTip ? ' has-tip' : ''}`}
+      >
         <section className="anchor-demo-today" aria-label="Статистика за сегодня">
           <p>СЕГОДНЯ</p>
           <div className="anchor-demo-today-grid">
@@ -353,8 +383,8 @@ export function PauseAnchorScreen({
               <small>{cigaretteWord(cigarettes)}</small>
             </span>
             <span>
-              <strong>{reachedPauses}</strong>
-              <small>{pauseDurationLabel(reachedPauses)}</small>
+              <PauseRatio reached={reachedPauses} measured={measuredPauses} />
+              <small>{measuredPauses > 0 ? 'ПАУЗ ДОСТИГЛИ ЦЕЛИ' : 'ПАУЗ ПОКА НЕТ'}</small>
             </span>
           </div>
         </section>
@@ -404,7 +434,12 @@ export function PauseAnchorScreen({
       </section>
 
       <div className="anchor-demo-smoke-slot">
-        {pauseActive && remainingSeconds > 0 ? (
+        {notice ? (
+          <div className="anchor-live-notice" role="status">
+            <span>{notice.message}</span>
+            {notice.onUndo && <button type="button" onClick={notice.onUndo}>ОТМЕНИТЬ</button>}
+          </div>
+        ) : pauseActive && remainingSeconds > 0 ? (
           <button
             type="button"
             className="anchor-demo-early-action"
@@ -413,9 +448,7 @@ export function PauseAnchorScreen({
           >
             ИДУ КУРИТЬ
           </button>
-        ) : (
-          <p>{pauseActive ? 'ЦЕЛЬ-ПАУЗА ДОСТИГНУТА' : 'НАЖМИ ПЕРЕД СИГАРЕТОЙ'}</p>
-        )}
+        ) : !pauseActive ? <p>НАЖМИ ПЕРЕД СИГАРЕТОЙ</p> : null}
       </div>
 
       <section className="anchor-demo-activities">
@@ -542,7 +575,7 @@ export function PauseAnchorDemo() {
   const progress = mode === 'ready'
     ? 0
     : Math.min(100, ((DEMO_GOAL_SECONDS - remainingSeconds) / DEMO_GOAL_SECONDS) * 100);
-  const message = useMemo(
+  const baseMessage = useMemo(
     () => mode === 'ready'
       ? {
           eyebrow: 'ТВОЯ ПАУЗА',
@@ -552,6 +585,14 @@ export function PauseAnchorDemo() {
       : pauseDemoMessage(progress),
     [mode, progress],
   );
+  const pauseHasTip = mode === 'running' && remainingSeconds > 0;
+  const message = pauseHasTip
+    ? {
+        ...baseMessage,
+        title: pauseTipForProgress(progress, dayStats.measuredPauses).text,
+        copy: '',
+      }
+    : baseMessage;
   const content = pauseDemoContent(progress);
   const puzzleFinished = content.kind === 'puzzle' &&
     puzzleSession?.status !== undefined &&
@@ -633,6 +674,7 @@ export function PauseAnchorDemo() {
     '--anchor-progress': `${Math.max(0, Math.min(360, progress * 3.6))}deg`,
   } as CSSProperties;
   const anchorAvailable = mode === 'ready' || remainingSeconds <= 0;
+  const pauseCompleted = mode !== 'ready' && anchorAvailable;
 
   return (
     <main className="anchor-demo-shell">
@@ -643,7 +685,9 @@ export function PauseAnchorDemo() {
           <span className="anchor-demo-settings" aria-hidden="true"><Settings /></span>
         </header>
 
-        <section className="anchor-demo-hero">
+        <section
+          className={`anchor-demo-hero${pauseCompleted ? ' is-completed' : ''}${pauseHasTip ? ' has-tip' : ''}`}
+        >
           <section className="anchor-demo-today" aria-label="Статистика за сегодня">
             <p>СЕГОДНЯ</p>
             <div className="anchor-demo-today-grid">
@@ -652,8 +696,8 @@ export function PauseAnchorDemo() {
                 <small>{cigaretteWord(dayStats.cigarettes)}</small>
               </span>
               <span>
-                <strong>{dayStats.reachedPauses}</strong>
-                <small>{pauseDurationLabel(dayStats.reachedPauses)}</small>
+                <PauseRatio reached={dayStats.reachedPauses} measured={dayStats.measuredPauses} />
+                <small>{dayStats.measuredPauses > 0 ? 'ПАУЗ ДОСТИГЛИ ЦЕЛИ' : 'ПАУЗ ПОКА НЕТ'}</small>
               </span>
             </div>
           </section>
@@ -705,7 +749,12 @@ export function PauseAnchorDemo() {
         </section>
 
         <div className="anchor-demo-smoke-slot">
-          {mode === 'running' && remainingSeconds > 0 ? (
+          {toast ? (
+            <div className="anchor-live-notice" role="status">
+              <span>{toast.message}</span>
+              <button type="button" onClick={undoSmoke}>ОТМЕНИТЬ</button>
+            </div>
+          ) : mode === 'running' && remainingSeconds > 0 ? (
             <button
               type="button"
               className="anchor-demo-early-action"
@@ -714,9 +763,7 @@ export function PauseAnchorDemo() {
             >
               ИДУ КУРИТЬ
             </button>
-          ) : (
-            <p>ЦЕЛЬ-ПАУЗА ДОСТИГНУТА</p>
-          )}
+          ) : mode === 'ready' ? <p>НАЖМИ ПЕРЕД СИГАРЕТОЙ</p> : null}
         </div>
 
         <section className="anchor-demo-activities">
@@ -825,12 +872,6 @@ export function PauseAnchorDemo() {
           </div>
         )}
 
-        {toast && (
-          <div className="anchor-demo-toast" role="status">
-            <span>{toast.message}</span>
-            <button type="button" onClick={undoSmoke}>ОТМЕНИТЬ</button>
-          </div>
-        )}
       </section>
 
       {mode === 'running' && (
