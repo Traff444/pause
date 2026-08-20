@@ -41,7 +41,7 @@
 
 .anchor-live-screen .anchor-demo-today {
   margin: 5px auto 0;
-  padding: 7px 10px 8px;
+  padding: 5px 10px 10px;
   border-radius: 18px;
 }
 
@@ -54,7 +54,11 @@
 }
 
 .anchor-live-screen .anchor-demo-today-grid small {
-  margin-top: 3px;
+  margin-top: 5px;
+  font-size: 9.5px;
+}
+
+.anchor-live-screen .anchor-demo-pause-ratio > .anchor-demo-pause-ratio-word {
   font-size: 9.5px;
 }
 
@@ -68,6 +72,20 @@
   min-height: 42px;
   margin-bottom: 2px;
   padding-top: 0;
+}
+
+.anchor-live-screen .anchor-demo-hero.is-completed .anchor-demo-support.compact {
+  min-height: 60px;
+  margin-bottom: 7px;
+  padding-top: 3px;
+  transform: translateY(clamp(12px, calc((100dvh - 700px) * 0.12), 28px));
+}
+
+.anchor-live-screen .anchor-demo-hero.has-tip .anchor-demo-support.compact {
+  min-height: 60px;
+  margin-bottom: 7px;
+  padding-top: 3px;
+  transform: translateY(clamp(8px, calc((100dvh - 600px) * 0.16), 52px));
 }
 
 .anchor-live-screen .anchor-demo-support > h1 {
@@ -143,7 +161,7 @@
   width: min(100%, 340px);
   min-width: 0;
   margin: 12px 0 auto;
-  padding: 9px 12px 11px;
+  padding: 7px 12px 13px;
   border: 1px solid rgba(18, 70, 184, 0.2);
   border-radius: 20px;
   background: rgba(255, 255, 255, 0.48);
@@ -156,7 +174,7 @@
 }
 
 .anchor-demo-today > p {
-  margin: 0 0 5px;
+  margin: 0 0 3px;
   color: #1246b8;
   font-size: 10px;
   font-weight: 850;
@@ -185,19 +203,44 @@
 
 .anchor-demo-today-grid strong {
   font-size: 28px;
-  font-weight: 850;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.04em;
   line-height: 0.95;
 }
 
-.anchor-demo-today-grid small {
-  margin-top: 5px;
+.anchor-demo-today-grid .anchor-demo-pause-ratio {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+}
+
+.anchor-demo-pause-ratio > span {
+  color: inherit;
+  font: inherit;
+}
+
+.anchor-demo-pause-ratio > .anchor-demo-pause-ratio-reference {
+  color: #1246b8;
+}
+
+.anchor-demo-pause-ratio > .anchor-demo-pause-ratio-word {
   color: #4f5867;
   font-size: 10.5px;
   font-weight: 800;
   letter-spacing: 0.025em;
   line-height: 1.12;
+}
+
+.anchor-demo-today-grid small {
+  margin-top: 7px;
+  color: #4f5867;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.025em;
+  line-height: 1.12;
+  transform: translateY(2px);
 }
 
 .anchor-demo-settings {
@@ -223,6 +266,14 @@
   flex-direction: column;
   align-items: center;
   justify-content: flex-end;
+}
+
+.anchor-demo-hero.is-completed .anchor-demo-support {
+  transform: translateY(clamp(12px, calc((100dvh - 700px) * 0.12), 28px));
+}
+
+.anchor-demo-hero.has-tip .anchor-demo-support {
+  transform: translateY(clamp(8px, calc((100dvh - 600px) * 0.16), 52px));
 }
 
 .anchor-demo-support {
@@ -460,6 +511,43 @@ button.anchor-demo-control {
 .anchor-demo-early-action:focus-visible {
   outline: 3px solid rgba(198, 61, 67, 0.25);
   outline-offset: 2px;
+}
+
+.anchor-live-notice {
+  display: grid;
+  width: 100%;
+  height: 42px;
+  min-height: 42px;
+  padding: 6px 10px 6px 12px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  border-radius: 14px;
+  background: #101114;
+  box-shadow: 0 7px 18px rgba(16, 17, 20, 0.16);
+  color: #fff;
+  animation: snackbar-in 180ms ease-out both;
+}
+
+.anchor-live-notice > span {
+  display: -webkit-box;
+  overflow: hidden;
+  color: inherit;
+  font-size: 8.5px;
+  line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.anchor-live-notice > button {
+  min-height: 30px;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: #fff;
+  font-size: 8.5px;
+  font-weight: 850;
+  cursor: pointer;
 }
 
 .anchor-demo-activities {
@@ -787,42 +875,6 @@ button.anchor-demo-control {
 .anchor-demo-game-sheet > button:active {
   background: rgba(18, 70, 184, 0.08);
   transform: scale(0.99);
-}
-
-.anchor-demo-toast {
-  position: fixed;
-  z-index: 240;
-  bottom: 170px;
-  left: 50%;
-  display: grid;
-  width: calc(100% - 28px);
-  max-width: 452px;
-  min-height: 54px;
-  padding: 11px 13px 11px 15px;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 10px;
-  transform: translateX(-50%);
-  border-radius: 15px;
-  background: #182238;
-  box-shadow: 0 10px 24px rgba(24, 34, 56, 0.2);
-  color: #fff;
-}
-
-.anchor-demo-toast > span {
-  font-size: 9px;
-  line-height: 1.35;
-}
-
-.anchor-demo-toast > button {
-  min-height: 44px;
-  padding: 0 4px;
-  border: 0;
-  background: transparent;
-  color: #fff;
-  font-size: 9px;
-  font-weight: 850;
-  cursor: pointer;
 }
 
 .anchor-demo-stages {

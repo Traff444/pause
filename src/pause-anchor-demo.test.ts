@@ -17,6 +17,7 @@ describe('pause anchor demo stages', () => {
     expect(pauseDemoMessage(50).eyebrow).toContain('ПОЛОВИНА');
     expect(pauseDemoMessage(80).eyebrow).toContain('80%');
     expect(pauseDemoMessage(100).eyebrow).toBe('ПАУЗА ЗАВЕРШЕНА');
+    expect(pauseDemoMessage(100).copy).toBe('');
   });
 
   it('promotes a tactile puzzle only during the final twenty percent', () => {

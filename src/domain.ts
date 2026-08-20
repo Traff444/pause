@@ -1,5 +1,6 @@
 export type Phase = 'observation' | 'reduction' | 'preparation' | 'quit';
 export type TabId = 'today' | 'plan' | 'health' | 'stats';
+export type StatisticsPeriod = 'Неделя' | 'Месяц' | 'Всё время';
 
 export type SmokingEvent = {
   id: string;
@@ -127,6 +128,20 @@ export function longestSmokingInterval(events: SmokingEvent[]) {
   return intervals.length ? Math.round(Math.max(...intervals)) : undefined;
 }
 
+export function pauseStatistics(events: SmokingEvent[]) {
+  const intervals = intervalsByLocalDay(events);
+  const rawTotalMinutes = intervals.reduce((sum, value) => sum + value, 0);
+  const totalMinutes = Math.round(rawTotalMinutes * 10) / 10;
+  return {
+    intervals,
+    totalMinutes,
+    averageMinutes: intervals.length
+      ? Math.round(rawTotalMinutes / intervals.length)
+      : undefined,
+    longestMinutes: intervals.length ? Math.round(Math.max(...intervals)) : undefined,
+  };
+}
+
 export function minutesSinceLastSmoking(events: SmokingEvent[], now = Date.now()) {
   const latest = activeEvents(events).filter((event) => event.occurredAt <= now).at(-1);
   return latest ? Math.max(0, Math.floor((now - latest.occurredAt) / minute)) : undefined;
@@ -143,7 +158,11 @@ export function calculateBaseline(
       (startedAt === undefined || event.occurredAt >= startedAt) &&
       (observationEnd === undefined || event.occurredAt < observationEnd),
   );
-  const daily = Math.round((valid.length / 7) * 10) / 10;
+  const observationDays =
+    startedAt === undefined || observationEnd === undefined
+      ? 7
+      : Math.max(1, (observationEnd - startedAt) / day);
+  const daily = Math.round((valid.length / observationDays) * 10) / 10;
   const interval = averageSmokingInterval(valid) ?? fallbackInterval;
   const step = Math.max(2, Math.min(5, Math.round(interval * 0.05)));
   return { daily, interval, step };
@@ -187,6 +206,7 @@ export function todayPauseModel(
 
   return {
     cigarettes: todayEvents.length,
+    measuredPauses: Math.max(0, todayEvents.length - 1),
     reachedPauses,
     anchor,
     remainingSeconds,
@@ -210,33 +230,58 @@ export function dayResult(events: SmokingEvent[], localDate: string, targetMinut
   return successful >= Math.ceil(intervals.length / 2) ? ('success' as const) : ('repeat' as const);
 }
 
-export function notSmoked(state: AppState, now = Date.now()) {
+export function baselineDailyRate(state: AppState) {
   if (!state.baseline) return 0;
+  const recalculated = calculateBaseline(
+    state.events,
+    state.baseline.interval,
+    state.startedAt,
+  ).daily;
+  return recalculated > 0 ? recalculated : state.baseline.daily;
+}
+
+function reductionTotals(state: AppState, now: number) {
+  if (!state.baseline) return { expected: 0, actual: 0 };
   const reductionStart = reductionStartedAt(state.startedAt);
   const elapsed = Math.max(0, now - reductionStart);
-  const expected = state.baseline.daily * (elapsed / day);
+  const expected = baselineDailyRate(state) * (elapsed / day);
   const actual = activeEvents(state.events).filter(
     (event) => event.occurredAt >= reductionStart && event.occurredAt <= now,
   ).length;
-  return Math.max(0, Math.round(expected - actual));
+  return { expected, actual };
+}
+
+export function notSmokedExact(state: AppState, now = Date.now()) {
+  const { expected, actual } = reductionTotals(state, now);
+  return Math.max(0, expected - actual);
+}
+
+export function notSmoked(state: AppState, now = Date.now()) {
+  return Math.round(notSmokedExact(state, now));
+}
+
+export function reductionPercent(state: AppState, now = Date.now()) {
+  const { expected } = reductionTotals(state, now);
+  if (expected <= 0) return 0;
+  return Math.min(100, Math.max(0, (notSmokedExact(state, now) / expected) * 100));
 }
 
 export function expectedCigarettesSinceReduction(state: AppState, now = Date.now()) {
   if (!state.baseline) return 0;
   const elapsed = Math.max(0, now - reductionStartedAt(state.startedAt));
-  return state.baseline.daily * (elapsed / day);
+  return baselineDailyRate(state) * (elapsed / day);
 }
 
 export function savedMoney(state: AppState, now = Date.now()) {
   const { packPrice, cigarettesPerPack } = state.settings;
   if (!packPrice || !cigarettesPerPack) return undefined;
-  return Math.round((notSmoked(state, now) * packPrice) / cigarettesPerPack);
+  return Math.round((notSmokedExact(state, now) * packPrice) / cigarettesPerPack);
 }
 
 export function lastSevenDayCounts(events: SmokingEvent[], now = Date.now()) {
   const result: Array<{ key: string; label: string; count: number }> = [];
   const labels = ['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'];
-  const valid = activeEvents(events);
+  const valid = activeEvents(events).filter((event) => event.occurredAt <= now);
   for (let offset = 6; offset >= 0; offset -= 1) {
     const date = new Date(now);
     date.setDate(date.getDate() - offset);
@@ -248,6 +293,89 @@ export function lastSevenDayCounts(events: SmokingEvent[], now = Date.now()) {
     });
   }
   return result;
+}
+
+export function statisticsEvents(
+  state: AppState,
+  period: StatisticsPeriod,
+  now = Date.now(),
+) {
+  const periodStart = new Date(now);
+  if (period === 'Неделя') {
+    periodStart.setDate(periodStart.getDate() - 6);
+  } else if (period === 'Месяц') {
+    periodStart.setDate(periodStart.getDate() - 29);
+  } else {
+    periodStart.setTime(state.startedAt);
+  }
+  if (period !== 'Всё время') periodStart.setHours(0, 0, 0, 0);
+
+  return activeEvents(state.events).filter(
+    (event) => event.occurredAt >= periodStart.getTime() && event.occurredAt <= now,
+  );
+}
+
+const roundedDailyAverage = (count: number, elapsedDays: number) =>
+  Math.round((count / Math.max(1, elapsedDays)) * 10) / 10;
+
+const elapsedLocalDaysFromMidnight = (start: number, end: number) => {
+  const endDayStart = new Date(end);
+  endDayStart.setHours(0, 0, 0, 0);
+  const nextDayStart = new Date(endDayStart);
+  nextDayStart.setDate(nextDayStart.getDate() + 1);
+  const completeDays = localDayOrdinal(end) - localDayOrdinal(start);
+  const currentDayFraction =
+    (end - endDayStart.getTime()) / (nextDayStart.getTime() - endDayStart.getTime());
+  return completeDays + currentDayFraction;
+};
+
+export function statisticsSeries(
+  state: AppState,
+  period: StatisticsPeriod,
+  now = Date.now(),
+) {
+  if (period === 'Неделя') return lastSevenDayCounts(state.events, now);
+
+  const events = activeEvents(state.events).filter((event) => event.occurredAt <= now);
+  if (period === 'Месяц') {
+    const firstBlockStart = new Date(now);
+    firstBlockStart.setHours(0, 0, 0, 0);
+    firstBlockStart.setDate(firstBlockStart.getDate() - 29);
+
+    return Array.from({ length: 10 }, (_, index) => {
+      const blockStartDate = new Date(firstBlockStart);
+      blockStartDate.setDate(blockStartDate.getDate() + index * 3);
+      const blockEndDate = new Date(blockStartDate);
+      blockEndDate.setDate(blockEndDate.getDate() + 3);
+      const blockStart = blockStartDate.getTime();
+      const blockEnd = Math.min(blockEndDate.getTime(), now);
+      const elapsedDays = Math.max(1, elapsedLocalDaysFromMidnight(blockStart, blockEnd));
+      const count = events.filter(
+        (event) => event.occurredAt >= blockStart && event.occurredAt < blockEnd,
+      ).length;
+      return {
+        key: `month-${index}`,
+        label: String(blockStartDate.getDate()),
+        count: roundedDailyAverage(count, elapsedDays),
+      };
+    });
+  }
+
+  const elapsedWeeks = Math.max(1, Math.ceil((now - state.startedAt) / (7 * day)));
+  const visibleWeeks = Math.min(16, elapsedWeeks);
+  return Array.from({ length: visibleWeeks }, (_, index) => {
+    const blockStart = state.startedAt + index * 7 * day;
+    const blockEnd = Math.min(blockStart + 7 * day, now);
+    const elapsedDays = Math.max(1, (blockEnd - blockStart) / day);
+    const count = events.filter(
+      (event) => event.occurredAt >= blockStart && event.occurredAt < blockEnd,
+    ).length;
+    return {
+      key: `week-${index}`,
+      label: `${index + 1}`,
+      count: roundedDailyAverage(count, elapsedDays),
+    };
+  });
 }
 
 export function createDemoState(scene: string, now = Date.now()): AppState {

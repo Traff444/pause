@@ -36,32 +36,33 @@ import {
 } from 'lucide-react';
 import {
   activeEvents,
-  averageSmokingInterval,
   calculateBaseline,
   createDemoState,
   createInitialState,
   day,
   dayResult,
   eventsToday,
-  expectedCigarettesSinceReduction,
   formatMinutes,
   formatTimer,
-  intervalsByLocalDay,
-  lastSevenDayCounts,
-  longestSmokingInterval,
   minute,
   minutesSinceLastSmoking,
   notSmoked,
+  notSmokedExact,
+  pauseStatistics,
   programDay,
   programWeek,
+  reductionPercent,
   reductionStartedAt,
   savedMoney,
   secondsUntilGoal,
+  statisticsEvents,
+  statisticsSeries,
   todayPauseModel,
   todayKey,
   type AppState,
   type SettingsState,
   type SmokingEvent,
+  type StatisticsPeriod,
   type TabId,
 } from './domain';
 import {
@@ -178,9 +179,8 @@ function App() {
   const [gameDemoState, setGameDemoState] = useState<AppState | undefined>(() =>
     gameDemoEnabled ? createGameDemoState(Date.now(), gameDemoComplete) : undefined,
   );
-  const staticDemoState = useMemo(
+  const [staticDemoState, setStaticDemoState] = useState<AppState | undefined>(
     () => (demoScene && !gameDemoEnabled ? createDemoState(demoScene) : undefined),
-    [demoScene, gameDemoEnabled],
   );
   const demoState = gameDemoState ?? staticDemoState;
   const onboardingPreview = useMemo<OnboardingPreview | undefined>(() => {
@@ -442,6 +442,11 @@ function App() {
   }
 
   const shownState = demoState ?? state;
+  const shownGoal = shownState.dailyGoals[todayKey(now)] ?? shownState.goal;
+  const anchorScreenActive =
+    shownState.activeTab === 'today' &&
+    (shownState.phase === 'reduction' || shownState.phase === 'preparation') &&
+    Boolean(shownGoal);
   const setWorkingState = (recipe: (current: AppState) => AppState) => {
     if (staticDemoState) return;
     if (gameDemoEnabled) {
@@ -509,8 +514,11 @@ function App() {
   };
 
   const selectTab = (activeTab: TabId) => {
-    if (staticDemoState) return;
-    update({ activeTab });
+    if (staticDemoState) {
+      setStaticDemoState((current) => (current ? { ...current, activeTab } : current));
+    } else {
+      update({ activeTab });
+    }
     const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     screenRef.current?.scrollTo({ top: 0, behavior: reduceMotion ? 'auto' : 'smooth' });
   };
@@ -530,6 +538,12 @@ function App() {
               now={now}
               onOpenSettings={() => setSettingsOpen(true)}
               onSmoke={recordSmoke}
+              notice={snackbar ? {
+                message: snackbar.message,
+                onUndo: snackbar.kind === 'undo'
+                  ? () => undoEvent(snackbar.eventId)
+                  : undefined,
+              } : undefined}
               onDismissGamePrompt={(anchor) => update({ dismissedGamePromptAnchor: anchor })}
               onRecordLapse={recordLapse}
               onPuzzleStateChange={(recipe) =>
@@ -561,7 +575,7 @@ function App() {
 
       <BottomNav active={shownState.activeTab} onSelect={selectTab} />
 
-      {snackbar && (
+      {snackbar && !anchorScreenActive && (
         <div className="snackbar" role="status">
           <span>{snackbar.message}</span>
           {snackbar.kind === 'undo' && (
@@ -1161,6 +1175,7 @@ function TodayScreen({
   now,
   onOpenSettings,
   onSmoke,
+  notice,
   onDismissGamePrompt,
   onRecordLapse,
   onPuzzleStateChange,
@@ -1170,6 +1185,10 @@ function TodayScreen({
   now: number;
   onOpenSettings: () => void;
   onSmoke: () => void;
+  notice?: {
+    message: string;
+    onUndo?: () => void;
+  };
   onDismissGamePrompt: (anchor: number) => void;
   onRecordLapse: () => void;
   onPuzzleStateChange: (recipe: (current: LocalPuzzleState) => LocalPuzzleState) => void;
@@ -1324,6 +1343,7 @@ function TodayScreen({
     return (
       <PauseAnchorScreen
         cigarettes={livePause.cigarettes}
+        measuredPauses={livePause.measuredPauses}
         reachedPauses={livePause.reachedPauses}
         goalSeconds={goal * 60}
         remainingSeconds={livePause.remainingSeconds}
@@ -1333,6 +1353,7 @@ function TodayScreen({
         onPuzzleStateChange={onPuzzleStateChange}
         onOpenSettings={onOpenSettings}
         onSmoke={onSmoke}
+        notice={notice}
       />
     );
   }
@@ -1605,16 +1626,13 @@ function HealthScreen({
   onActivity: () => void;
 }) {
   const reduced = notSmoked(state, now);
-  const expected = expectedCigarettesSinceReduction(state, now);
+  const reducedExact = notSmokedExact(state, now);
   const money = savedMoney(state, now);
-  const packs = reduced / (state.settings.cigarettesPerPack || 20);
+  const packs = reducedExact / (state.settings.cigarettesPerPack || 20);
   const reductionEvents = activeEvents(state.events).filter(
     (event) => event.occurredAt >= reductionStartedAt(state.startedAt) && event.occurredAt <= now,
   );
-  const actualAveragePause =
-    averageSmokingInterval(reductionEvents) ??
-    averageSmokingInterval(state.events) ??
-    state.baseline?.interval;
+  const actualAveragePause = pauseStatistics(reductionEvents).averageMinutes;
   const completed = state.activityDone === todayKey(now);
   const moneyProgress =
     money !== undefined && state.settings.moneyGoal
@@ -1646,7 +1664,7 @@ function HealthScreen({
           <section className="card health-hero">
             <p className="section-label">НЕ ВЫКУРЕНО</p>
             <strong>{reduced} {pluralCigarettes(reduced)}</strong>
-            <p>На {expected ? Math.round((reduced / expected) * 100) : 0}% меньше, чем обычно</p>
+            <p>На {Math.round(reductionPercent(state, now))}% меньше, чем обычно</p>
             <svg viewBox="0 0 300 54" role="img" aria-label="Тенденция сокращения">
               <path d="M2 46C28 48 32 37 58 41s29-7 54-4 28-12 52-7 28-4 48-13 31 4 46-8 25 2 40-7" />
             </svg>
@@ -1676,9 +1694,13 @@ function HealthScreen({
 
           <section className="card pause-card">
             <p className="section-label">СРЕДНЯЯ ПАУЗА</p>
-            <strong>{formatMinutes(actualAveragePause ?? state.baseline.interval)}</strong>
-            <p>В начале: {state.baseline.interval} минут</p>
-            <Progress value={Math.min(100, ((actualAveragePause ?? state.baseline.interval) / Math.max(1, state.baseline.interval * 4)) * 100)} />
+            <strong>{actualAveragePause === undefined ? '—' : formatMinutes(actualAveragePause)}</strong>
+            <p>
+              {actualAveragePause === undefined
+                ? 'Пока недостаточно новых отметок'
+                : `В начале: ${state.baseline.interval} минут`}
+            </p>
+            <Progress value={actualAveragePause === undefined ? 0 : Math.min(100, (actualAveragePause / Math.max(1, state.baseline.interval * 4)) * 100)} />
           </section>
         </>
       )}
@@ -1714,25 +1736,17 @@ function ActivityCard({ completed, onActivity }: { completed: boolean; onActivit
 }
 
 function StatsScreen({ state, now }: { state: AppState; now: number }) {
-  const [period, setPeriod] = useState<'Неделя' | 'Месяц' | 'Всё время'>('Неделя');
+  const [period, setPeriod] = useState<StatisticsPeriod>('Неделя');
   const counts = statisticsSeries(state, period, now);
   const periodEvents = statisticsEvents(state, period, now);
   const max = Math.max(1, ...counts.map((item) => item.count));
   const reduced = notSmoked(state, now);
   const money = savedMoney(state, now);
-  const measuredAveragePause = averageSmokingInterval(periodEvents);
-  const averagePause =
-    measuredAveragePause ??
-    averageSmokingInterval(state.events) ??
-    state.baseline?.interval;
-  const longestPause =
-    longestSmokingInterval(periodEvents) ??
-    longestSmokingInterval(state.events) ??
-    state.baseline?.interval;
-  const periodIntervals = intervalsByLocalDay(periodEvents);
-  const intervalTotal = Math.round(
-    periodIntervals.reduce((sum, value) => sum + value, 0) * 10,
-  ) / 10;
+  const periodPauses = pauseStatistics(periodEvents);
+  const averagePause = periodPauses.averageMinutes;
+  const longestPause = periodPauses.longestMinutes;
+  const periodIntervals = periodPauses.intervals;
+  const intervalTotal = periodPauses.totalMinutes;
 
   return (
     <>
@@ -1772,7 +1786,7 @@ function StatsScreen({ state, now }: { state: AppState; now: number }) {
             {periodIntervals.length ? (
               <>
                 <strong>
-                  {intervalTotal} мин ÷ {periodIntervals.length} = {measuredAveragePause} мин
+                  {intervalTotal} мин ÷ {periodIntervals.length} = {averagePause} мин
                 </strong>
                 <small>
                   Ночные переходы между календарными днями и отменённые отметки не учитываются.
@@ -1786,7 +1800,7 @@ function StatsScreen({ state, now }: { state: AppState; now: number }) {
       ) : (
         <>
           <h1 className="stats-statement">
-            На {reduced} {pluralCigarettes(reduced)} меньше, чем в первую неделю
+            За всё время программы — на {reduced} {pluralCigarettes(reduced)} меньше, чем в первую неделю
           </h1>
           <section className="card chart-card">
             <p>Сигареты в день</p>
@@ -1796,7 +1810,9 @@ function StatsScreen({ state, now }: { state: AppState; now: number }) {
             >
               {counts.map((item) => (
                 <div className="bar-column" key={item.key}>
-                  <span className="bar-value">{item.count}</span>
+                  <span className="bar-value">
+                    {item.count.toLocaleString('ru-RU', { maximumFractionDigits: 1 })}
+                  </span>
                   <span className="bar" style={{ height: `${Math.max(12, (item.count / max) * 154)}px` }} />
                   <span className="bar-label">{item.label}</span>
                 </div>
@@ -1805,7 +1821,7 @@ function StatsScreen({ state, now }: { state: AppState; now: number }) {
           </section>
           <section className="card stats-pause-card">
             <p className="section-label">СРЕДНЯЯ ПАУЗА</p>
-            <strong>{formatMinutes(averagePause ?? state.baseline.interval)}</strong>
+            <strong>{averagePause === undefined ? '—' : formatMinutes(averagePause)}</strong>
             <div className="stats-lines">
               <span>В начале <b>{state.baseline.interval} мин</b></span>
               <span>Цель сегодня <b>{state.goal ?? state.baseline.interval} мин</b></span>
@@ -1830,11 +1846,11 @@ function StatsScreen({ state, now }: { state: AppState; now: number }) {
             <section className="card">
               <Clock3 />
               <span>Самая длинная пауза</span>
-              <strong>{formatMinutes(longestPause ?? state.baseline.interval)}</strong>
+              <strong>{longestPause === undefined ? '—' : formatMinutes(longestPause)}</strong>
             </section>
             <section className="card">
               <Target />
-              <span>Примерно сохранено</span>
+              <span>Примерно сохранено за всю программу</span>
               <strong>{money === undefined ? '—' : `${money.toLocaleString('ru-RU')} ₽`}</strong>
             </section>
           </div>
@@ -2045,66 +2061,6 @@ function Progress({ value }: { value: number }) {
     <div className="progress" aria-label={`Прогресс ${Math.round(value)}%`}>
       <span style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
     </div>
-  );
-}
-
-function statisticsSeries(
-  state: AppState,
-  period: 'Неделя' | 'Месяц' | 'Всё время',
-  now: number,
-) {
-  if (period === 'Неделя') return lastSevenDayCounts(state.events, now);
-
-  const events = activeEvents(state.events);
-  if (period === 'Месяц') {
-    return Array.from({ length: 10 }, (_, index) => {
-      const blockStart = now - (29 - index * 3) * day;
-      const blockEnd = blockStart + 3 * day;
-      const date = new Date(blockStart);
-      return {
-        key: `month-${index}`,
-        label: String(date.getDate()),
-        count: Math.round(
-          events.filter((event) => event.occurredAt >= blockStart && event.occurredAt < blockEnd)
-            .length / 3,
-        ),
-      };
-    });
-  }
-
-  const elapsedWeeks = Math.max(1, Math.ceil((now - state.startedAt) / (7 * day)));
-  const visibleWeeks = Math.min(16, elapsedWeeks);
-  return Array.from({ length: visibleWeeks }, (_, index) => {
-    const blockStart = state.startedAt + index * 7 * day;
-    const blockEnd = blockStart + 7 * day;
-    return {
-      key: `week-${index}`,
-      label: `${index + 1}`,
-      count: Math.round(
-        events.filter((event) => event.occurredAt >= blockStart && event.occurredAt < blockEnd)
-          .length / 7,
-      ),
-    };
-  });
-}
-
-function statisticsEvents(
-  state: AppState,
-  period: 'Неделя' | 'Месяц' | 'Всё время',
-  now: number,
-) {
-  const periodStart = new Date(now);
-  if (period === 'Неделя') {
-    periodStart.setDate(periodStart.getDate() - 6);
-  } else if (period === 'Месяц') {
-    periodStart.setDate(periodStart.getDate() - 29);
-  } else {
-    periodStart.setTime(state.startedAt);
-  }
-  if (period !== 'Всё время') periodStart.setHours(0, 0, 0, 0);
-
-  return activeEvents(state.events).filter(
-    (event) => event.occurredAt >= periodStart.getTime() && event.occurredAt <= now,
   );
 }
 
