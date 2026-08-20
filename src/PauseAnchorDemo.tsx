@@ -106,17 +106,6 @@ export function pauseDurationSummary(value: number) {
   return `${value} ${pauseDurationLabel(value)}`;
 }
 
-function PauseRatio({ reached, measured }: { reached: number; measured: number }) {
-  if (measured <= 0) return <strong>—</strong>;
-  return (
-    <strong className="anchor-demo-pause-ratio" aria-label={`${reached} из ${measured}`}>
-      <span>{reached}</span>
-      <span className="anchor-demo-pause-ratio-word">из</span>
-      <span className="anchor-demo-pause-ratio-reference">{measured}</span>
-    </strong>
-  );
-}
-
 export function recordDemoSmoke(
   stats: DemoDayStats,
   remainingSeconds: number,
@@ -225,7 +214,6 @@ function ContentIcon({ kind }: { kind: DemoContent['kind'] }) {
 
 type PauseAnchorScreenProps = {
   cigarettes: number;
-  measuredPauses: number;
   reachedPauses: number;
   goalSeconds?: number;
   remainingSeconds: number;
@@ -249,7 +237,6 @@ function storyForProgress(progress: number): PauseStoryId {
 
 export function PauseAnchorScreen({
   cigarettes,
-  measuredPauses,
   reachedPauses,
   goalSeconds,
   remainingSeconds,
@@ -383,8 +370,8 @@ export function PauseAnchorScreen({
               <small>{cigaretteWord(cigarettes)}</small>
             </span>
             <span>
-              <PauseRatio reached={reachedPauses} measured={measuredPauses} />
-              <small>{measuredPauses > 0 ? 'ПАУЗ ДОСТИГЛИ ЦЕЛИ' : 'ПАУЗ ПОКА НЕТ'}</small>
+              <strong>{reachedPauses}</strong>
+              <small>{pauseDurationLabel(reachedPauses)}</small>
             </span>
           </div>
         </section>
@@ -696,8 +683,8 @@ export function PauseAnchorDemo() {
                 <small>{cigaretteWord(dayStats.cigarettes)}</small>
               </span>
               <span>
-                <PauseRatio reached={dayStats.reachedPauses} measured={dayStats.measuredPauses} />
-                <small>{dayStats.measuredPauses > 0 ? 'ПАУЗ ДОСТИГЛИ ЦЕЛИ' : 'ПАУЗ ПОКА НЕТ'}</small>
+                <strong>{dayStats.reachedPauses}</strong>
+                <small>{pauseDurationLabel(dayStats.reachedPauses)}</small>
               </span>
             </div>
           </section>
